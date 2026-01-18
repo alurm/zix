@@ -14,6 +14,8 @@
 // https://github.com/ziglang/zig/issues/352, "Support code coverage when testing".
 
 const std = @import("std");
+const testing = std.testing;
+
 const Self = @This();
 
 // We accumulate results as ArrayLists and turn them into slices when done.
@@ -52,8 +54,8 @@ pub const Token = union(enum) {
     // Newlines are emitted since some code may be rejected based on that later.
     newline,
 
-    word: []u8,
-    comment: []u8,
+    word: []const u8,
+    comment: []const u8,
 
     pub fn deinit(self: Token, allocator: std.mem.Allocator) void {
         switch (self) {
@@ -138,6 +140,8 @@ fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.A
                         allocator,
                         .{ .comment = try comment.value.toOwnedSlice(allocator) },
                     );
+                    // Without this just removing all the comment tokens might change the meaning.
+                    try result.append(allocator, .newline);
                     tokenizer.state = .default;
                 },
                 else => try comment.value.append(allocator, char),
@@ -217,4 +221,62 @@ fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.A
 test {
     const a_token: Token = .{ .word = try std.testing.allocator.alloc(u8, 100) };
     defer std.testing.allocator.free(a_token.word);
+}
+
+test "tokenize an empty string" {
+    var tokenizer: Self = .{};
+    defer tokenizer.deinit(testing.allocator);
+    const tokens = try tokenizer.string(testing.allocator, "");
+    defer testing.allocator.free(tokens);
+    defer for (tokens) |token| token.deinit(testing.allocator);
+    try testing.expect(tokens.len == 0);
+}
+
+test "tokenize a bunch of stuff" {
+    var tokenizer: Self = .{};
+    defer tokenizer.deinit(testing.allocator);
+
+    const str =
+        \\$ 'hello' world (very cool) # This is a comment.
+        \\\
+        \\  hello world
+        \\;
+        \\
+    ;
+    const tokens = try tokenizer.string(
+        testing.allocator,
+        str,
+    );
+    defer testing.allocator.free(tokens);
+    defer for (tokens) |token| token.deinit(testing.allocator);
+
+    try testing.expectEqualDeep(
+        tokens,
+        @as([]const Token, &.{
+            .{ .dollar_sign = {} },
+            .{ .word = "hello" },
+            .{ .word = "world" },
+            .{ .opening_paren = {} },
+            .{ .word = "very" },
+            .{ .word = "cool" },
+            .{ .closing_paren = {} },
+            .{ .comment = "This is a comment." },
+            .{ .newline = {} },
+            .{ .backslash = {} },
+            .{ .newline = {} },
+            .{ .word = "hello" },
+            .{ .word = "world" },
+            .{ .newline = {} },
+            .{ .semicolon = {} },
+            .{ .newline = {} },
+        }),
+    );
+}
+
+test "tokenize trailing space" {
+    var tokenizer: Self = .{};
+    defer tokenizer.deinit(testing.allocator);
+    const tokens = try tokenizer.tokenize(testing.allocator, ' ');
+    defer testing.allocator.free(tokens);
+    defer for (tokens) |token| token.deinit(testing.allocator);
 }
