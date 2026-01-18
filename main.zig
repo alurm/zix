@@ -2,9 +2,9 @@
 // Maybe something like comptime { _ = ... } can be useful.
 
 const std = @import("std");
+const root = @import("zix");
 
-const Tokenizer = @import("tokenizer.zig");
-const Token = Tokenizer.Token;
+const Tokenizer = root.Tokenizer;
 
 pub fn main() !void {
     // TODO: pick an allocator based on the current build configuration.
