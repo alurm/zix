@@ -218,6 +218,7 @@ fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.A
     return result;
 }
 
+// TODO: consider removing this test.
 test {
     const a_token: Token = .{ .word = try std.testing.allocator.alloc(u8, 100) };
     defer std.testing.allocator.free(a_token.word);
