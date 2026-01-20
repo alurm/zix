@@ -61,7 +61,9 @@ pub fn main() !void {
     var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer std.debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
+
     var tokenizer: Tokenizer = .{};
     defer tokenizer.deinit(allocator);
+
     try loop(allocator, &tokenizer);
 }

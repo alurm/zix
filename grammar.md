@@ -10,6 +10,9 @@ Principles:
 
 The grammar is mostly space-insensitive. Nested backslashes are rejected. They are considered confusing.
 
+TODO: I think the current grammar doesn't work since regular_statements can't end?
+TODO: look at ./simplified_grammar.md for a solution and update the grammar.
+
 ```text
 input := { regular_statement } <end of input> ;
 

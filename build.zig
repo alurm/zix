@@ -1,3 +1,5 @@
+// TODO: test that this is available as a library.
+
 const std = @import("std");
 
 // Although this function looks imperative, it does not perform the build
