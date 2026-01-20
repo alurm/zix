@@ -28,8 +28,8 @@ state: union(enum) {
             after_space,
         } = .expecting_space,
     },
-    bare_word: std.ArrayList(u8),
-    quoted_word: struct {
+    bare_string: std.ArrayList(u8),
+    quoted_string: struct {
         value: std.ArrayList(u8),
         state: union(enum) {
             default,
@@ -54,7 +54,7 @@ pub const Token = union(enum) {
     // Newlines are emitted since some code may be rejected based on that later.
     newline,
 
-    word: []const u8,
+    string: []const u8,
     comment: []const u8,
 
     pub fn deinit(self: Token, allocator: std.mem.Allocator) void {
@@ -67,7 +67,7 @@ pub const Token = union(enum) {
             .dollar_sign,
             => {},
 
-            .word,
+            .string,
             .comment,
             => |it| allocator.free(it),
         }
@@ -85,7 +85,7 @@ pub const Token = union(enum) {
             .opening_paren,
             .semicolon,
             => |_, tag| std.debug.print("{s}\n", .{@tagName(tag)}),
-            inline .comment, .word => |value, tag| std.debug.print("{s}: {s}\n", .{ @tagName(tag), value }),
+            inline .comment, .string => |value, tag| std.debug.print("{s}: {s}\n", .{ @tagName(tag), value }),
         }
     }
 };
@@ -106,8 +106,8 @@ pub fn string(tokenizer: *Self, allocator: std.mem.Allocator, str: []const u8) !
 pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
     switch (self.state) {
         .default => {},
-        .bare_word => |*list| list.deinit(allocator),
-        inline .comment, .quoted_word => |*data| data.value.deinit(allocator),
+        .bare_string => |*list| list.deinit(allocator),
+        inline .comment, .quoted_string => |*data| data.value.deinit(allocator),
     }
 }
 
@@ -163,28 +163,28 @@ fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.A
             '#' => tokenizer.state = .{
                 .comment = .{ .value = .empty, .state = .expecting_space },
             },
-            '\'' => tokenizer.state = .{ .quoted_word = .{ .value = .empty } },
+            '\'' => tokenizer.state = .{ .quoted_string = .{ .value = .empty } },
             // NOTE: could be useful to reject some funny characters here, which we currently don't do.
             else => {
-                tokenizer.state = .{ .bare_word = .empty };
-                try tokenizer.state.bare_word.append(allocator, char);
+                tokenizer.state = .{ .bare_string = .empty };
+                try tokenizer.state.bare_string.append(allocator, char);
             },
         },
         // Inside of quotes, a double single quote is treated as a literal single quote.
         // No other escape sequences are available.
-        .quoted_word => |*quoted_word| switch (quoted_word.state) {
+        .quoted_string => |*quoted_string| switch (quoted_string.state) {
             .default => switch (char) {
-                '\'' => quoted_word.state = .after_quote,
-                else => try quoted_word.value.append(allocator, char),
+                '\'' => quoted_string.state = .after_quote,
+                else => try quoted_string.value.append(allocator, char),
             },
             .after_quote => switch (char) {
                 '\'' => {
-                    quoted_word.state = .default;
-                    try quoted_word.value.append(allocator, '\'');
+                    quoted_string.state = .default;
+                    try quoted_string.value.append(allocator, '\'');
                 },
                 else => {
                     try result.append(allocator, .{
-                        .word = try quoted_word.value.toOwnedSlice(allocator),
+                        .string = try quoted_string.value.toOwnedSlice(allocator),
                     });
                     // Analyze the current char again in the default state.
                     tokenizer.state = .default;
@@ -197,21 +197,21 @@ fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.A
         // It would be nice to be able to paste raw URLs without using quotes.
         // Some of them have parens.
         // One way to solve this would be to accept matching parens.
-        // E.g. to tokenize https://foo.com/(bar) as a bare word.
+        // E.g. to tokenize https://foo.com/(bar) as a string.
         // This might require arbitrary lookahead.
         // Never stopping at ')' is undesirable because then in (foo bar baz),
-        // 'baz)' would be a bare word.
+        // 'baz)' would be a string.
         // For now, just stop if ')' is found.
-        .bare_word => |*bare_word| switch (char) {
+        .bare_string => |*bare_string| switch (char) {
             ' ', '\t', '\n', ')' => {
                 try result.append(allocator, .{
-                    .word = try bare_word.toOwnedSlice(allocator),
+                    .string = try bare_string.toOwnedSlice(allocator),
                 });
                 // Analyze the current char again in the default state.
                 tokenizer.state = .default;
                 continue :swich tokenizer.state;
             },
-            else => try bare_word.append(allocator, char),
+            else => try bare_string.append(allocator, char),
         },
     }
 
@@ -220,8 +220,8 @@ fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.A
 
 // TODO: consider removing this test.
 test {
-    const a_token: Token = .{ .word = try std.testing.allocator.alloc(u8, 100) };
-    defer std.testing.allocator.free(a_token.word);
+    const a_token: Token = .{ .string = try std.testing.allocator.alloc(u8, 100) };
+    defer std.testing.allocator.free(a_token.string);
 }
 
 test "tokenize an empty string" {
@@ -255,18 +255,18 @@ test "tokenize a bunch of stuff" {
         tokens,
         @as([]const Token, &.{
             .{ .dollar_sign = {} },
-            .{ .word = "hello" },
-            .{ .word = "world" },
+            .{ .string = "hello" },
+            .{ .string = "world" },
             .{ .opening_paren = {} },
-            .{ .word = "very" },
-            .{ .word = "cool" },
+            .{ .string = "very" },
+            .{ .string = "cool" },
             .{ .closing_paren = {} },
             .{ .comment = "This is a comment." },
             .{ .newline = {} },
             .{ .backslash = {} },
             .{ .newline = {} },
-            .{ .word = "hello" },
-            .{ .word = "world" },
+            .{ .string = "hello" },
+            .{ .string = "world" },
             .{ .newline = {} },
             .{ .semicolon = {} },
             .{ .newline = {} },

@@ -40,18 +40,18 @@ inline_statement :=
   | statement_part(inline_statement)
 ;
 
-statement_part(inner_statement) := [ '$' ] ( '(' inner_statement | word )
+statement_part(inner_statement) := [ '$' ] ( '(' inner_statement | string )
 
 comment_line := { ! '\n' } '\n'
 
-word := '\'' quoted_word | bare_word ;
+string := '\'' quoted_string | bare_string ;
 
-quoted_word :=
-  | '\'' [ '\\' quoted_word ]
-  | <any character> quoted_word
+quoted_string :=
+  | '\'' [ '\\' quoted_string ]
+  | <any character> quoted_string
 ;
 
-bare_word := { ! ( '\n' | ')' ) } non_consuming(')' | <whitespace>)
+bare_string := { ! ( '\n' | ')' ) } non_consuming(')' | <whitespace>)
 ```
 
 # Example scripts
