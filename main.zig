@@ -1,7 +1,17 @@
+// Do we need test { std.testing.refAllDecls(@This()); }?
+// Or comptime { _ = ... }?
+// Perhaps can be?
+// Perhaps referencing stuff manually would be enough?
+// I don't know.
+// https://ziggit.dev/t/how-do-i-get-zig-build-to-run-all-the-tests/4434
+
 const std = @import("std");
 
-const root = @import("root.zig");
-const Tokenizer = root.Tokenizer;
+const Tokenizer = @import("tokenizer.zig");
+
+test {
+    std.testing.refAllDecls(@This());
+}
 
 // The current idea is to always go through root for everything.
 
