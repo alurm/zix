@@ -76,17 +76,17 @@ pub const Token = union(enum) {
     // TODO: stop using std.debug.print.
     // This function is kinda crappy but works.
     /// Prints a line to stderr describing the given token using std.debug.print.
-    pub fn print(token: Token) void {
-        switch (token) {
+    pub fn print(token: Token, writer: *std.Io.Writer) !void {
+        return switch (token) {
             inline .backslash,
             .closing_paren,
             .dollar_sign,
             .newline,
             .opening_paren,
             .semicolon,
-            => |_, tag| std.debug.print("{s}\n", .{@tagName(tag)}),
-            inline .comment, .string => |value, tag| std.debug.print("{s}: {s}\n", .{ @tagName(tag), value }),
-        }
+            => |_, tag| writer.print("{s}\n", .{@tagName(tag)}),
+            inline .comment, .string => |value, tag| writer.print("{s}: {s}\n", .{ @tagName(tag), value }),
+        };
     }
 };
 
@@ -117,6 +117,41 @@ pub fn tokenize(self: *Self, allocator: std.mem.Allocator, char: u8) ![]Token {
     var result = try tokenizeMain(self, allocator, char);
     return result.toOwnedSlice(allocator);
 }
+
+pub const Stream = struct {
+    buffer: []Token,
+    position: usize,
+    reader: *std.Io.Reader,
+    tokenizer: Self,
+
+    pub fn init(reader: *std.Io.Reader, tokenizer: Self) @This() {
+        return .{
+            .buffer = &[0]Token{},
+            .reader = reader,
+            .position = 0,
+            .tokenizer = tokenizer,
+        };
+    }
+
+    // Seems terribly inefficient.
+    pub fn next(self: *@This(), allocator: std.mem.Allocator) !Token {
+        swtch: switch (self.position < self.buffer.len) {
+            true => {
+                const token = self.buffer[self.position];
+                self.position += 1;
+                return token;
+            },
+            false => {
+                allocator.free(self.buffer);
+                self.position = 0;
+                var byte: [1]u8 = undefined;
+                try self.reader.readSliceAll(&byte);
+                self.buffer = try self.tokenizer.tokenize(allocator, byte[0]);
+                continue :swtch self.position < self.buffer.len;
+            },
+        }
+    }
+};
 
 // TODO: consider recognizing an end of file special character.
 // This is not required if we require chunks to end with newlines.

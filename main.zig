@@ -75,5 +75,25 @@ pub fn main() !void {
     var tokenizer: Tokenizer = .{};
     defer tokenizer.deinit(allocator);
 
-    try loop(allocator, &tokenizer);
+    var reader_buffer: [buffer_size]u8 = undefined;
+    var reader = std.fs.File.stdin().reader(&reader_buffer);
+    const read = &reader.interface;
+
+    var writer_buffer: [buffer_size]u8 = undefined;
+    var writer = std.fs.File.stdout().writer(&writer_buffer);
+    const write = &writer.interface;
+
+    // try loop(allocator, &tokenizer);
+
+    var tokens: Tokenizer.Stream = .init(read, tokenizer);
+
+    while (true) {
+        const token = tokens.next(allocator) catch |e| switch (e) {
+            error.EndOfStream => return,
+            else => return e,
+        };
+        defer token.deinit(allocator);
+        try token.print(write);
+        try write.flush();
+    }
 }
