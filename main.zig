@@ -7,6 +7,7 @@
 
 const std = @import("std");
 
+const parser = @import("parser.zig");
 const Tokenizer = @import("tokenizer.zig");
 
 test {
@@ -24,13 +25,13 @@ test {
 const buffer_size = 1024;
 
 fn loop(allocator: std.mem.Allocator, tokenizer: *Tokenizer) !void {
+    var reader_buffer: [buffer_size]u8 = undefined;
+    var reader = std.fs.File.stdin().reader(&reader_buffer);
+    const read = &reader.interface;
+
     var writer_buffer: [buffer_size]u8 = undefined;
     var writer = std.fs.File.stdout().writer(&writer_buffer);
     const write = &writer.interface;
-
-    var reader_buffer: [buffer_size]u8 = undefined;
-    var reader = std.fs.File.stdin().reader(&reader_buffer);
-    var read = &reader.interface;
 
     while (true) {
         var read_buffer: [buffer_size]u8 = undefined;
@@ -55,7 +56,7 @@ fn loop(allocator: std.mem.Allocator, tokenizer: *Tokenizer) !void {
             defer allocator.free(tokens);
             for (tokens) |token| {
                 defer token.deinit(allocator);
-                token.print();
+                try token.print(write);
             }
         }
 
@@ -65,6 +66,20 @@ fn loop(allocator: std.mem.Allocator, tokenizer: *Tokenizer) !void {
     }
 }
 
+pub fn help(writer: *std.Io.Writer) !void {
+    return writer.print(
+        \\Zix 0.0.1
+        \\
+        \\To exit, type a closing parenthesis followed by a newline.
+        \\
+        \\Type `help` (without backticks) for help.
+        \\
+    , .{});
+}
+
+// Write should be renamed as writer.
+// Read should be renamed as reader.
+// Or something like that.
 pub fn main() !void {
     // TODO: pick an allocator based on the current build configuration.
     // const allocator = std.heap.smp_allocator;
@@ -75,6 +90,8 @@ pub fn main() !void {
     var tokenizer: Tokenizer = .{};
     defer tokenizer.deinit(allocator);
 
+    // try loop(allocator, &tokenizer);
+
     var reader_buffer: [buffer_size]u8 = undefined;
     var reader = std.fs.File.stdin().reader(&reader_buffer);
     const read = &reader.interface;
@@ -83,17 +100,32 @@ pub fn main() !void {
     var writer = std.fs.File.stdout().writer(&writer_buffer);
     const write = &writer.interface;
 
-    // try loop(allocator, &tokenizer);
+    try shell(write, read, &tokenizer, allocator);
+}
 
-    var tokens: Tokenizer.Stream = .init(read, tokenizer);
+fn shell(
+    write: *std.Io.Writer,
+    read: *std.Io.Reader,
+    tokenizer: *Tokenizer,
+    allocator: std.mem.Allocator,
+) !void {
+    var token_stream: Tokenizer.Stream = .init(read, tokenizer);
+    defer token_stream.deinit(allocator);
+
+    try help(write);
 
     while (true) {
-        const token = tokens.next(allocator) catch |e| switch (e) {
+        try write.print("\n", .{});
+        try write.flush();
+        const statement = parser.Statement.parse(&token_stream, allocator) catch |e| switch (e) {
             error.EndOfStream => return,
             else => return e,
         };
-        defer token.deinit(allocator);
-        try token.print(write);
+        defer statement.deinit(allocator);
+        if (token_stream.peek_buffer()) |token|
+            if (token == .closing_paren) return;
+        try statement.pretty_print(write, 0);
+        try write.print("\n", .{});
         try write.flush();
     }
 }

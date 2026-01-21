@@ -9,8 +9,8 @@ statement :=
   | expression statement
 ;
 
-expression :=
-  | [ '$' ] '(' '\n' block
+expression := [ '$' ] (
+  | '(' block
   | string
-;
+) ;
 ```

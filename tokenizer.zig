@@ -91,6 +91,8 @@ pub const Token = union(enum) {
 };
 
 // Not sure if this naming is the best.
+// Might be buggy?
+// I don't know.
 /// Tokenizes a whole string instead of a single byte.
 pub fn string(tokenizer: *Self, allocator: std.mem.Allocator, str: []const u8) ![]Token {
     var result: std.ArrayList(Token) = .empty;
@@ -112,6 +114,7 @@ pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
 }
 
 // A wrapper to call .toOwnedSlice on the result of tokenize_main.
+// Does toOwnedSlice free on error?
 /// Tokenizes one character of input.
 pub fn tokenize(self: *Self, allocator: std.mem.Allocator, char: u8) ![]Token {
     var result = try tokenizeMain(self, allocator, char);
@@ -122,9 +125,9 @@ pub const Stream = struct {
     buffer: []Token,
     position: usize,
     reader: *std.Io.Reader,
-    tokenizer: Self,
+    tokenizer: *Self,
 
-    pub fn init(reader: *std.Io.Reader, tokenizer: Self) @This() {
+    pub fn init(reader: *std.Io.Reader, tokenizer: *Self) @This() {
         return .{
             .buffer = &[0]Token{},
             .reader = reader,
@@ -133,16 +136,34 @@ pub const Stream = struct {
         };
     }
 
+    pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+        // Only free tokens not already consumed.
+        for (self.buffer[self.position..self.buffer.len]) |token| token.deinit(allocator);
+        allocator.free(self.buffer);
+    }
+
+    pub fn peek_buffer(self: *@This()) ?Token {
+        if (self.position < self.buffer.len) {
+            const token = self.buffer[self.position];
+            return token;
+        }
+        return null;
+    }
+
     // Seems terribly inefficient.
-    pub fn next(self: *@This(), allocator: std.mem.Allocator) !Token {
+    pub fn get(self: *@This(), allocator: std.mem.Allocator, mode: enum {
+        peek,
+        next,
+    }) !Token {
         swtch: switch (self.position < self.buffer.len) {
             true => {
                 const token = self.buffer[self.position];
-                self.position += 1;
+                if (mode == .next) self.position += 1;
                 return token;
             },
             false => {
                 allocator.free(self.buffer);
+                self.buffer.len = 0;
                 self.position = 0;
                 var byte: [1]u8 = undefined;
                 try self.reader.readSliceAll(&byte);

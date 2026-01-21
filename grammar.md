@@ -57,6 +57,10 @@ quoted_string :=
 bare_string := { ! ( '\n' | ')' ) } non_consuming(')' | <whitespace>)
 ```
 
+---
+
+- `$foo` is a syntactic sugar for `$(get foo)`.
+
 # Example scripts
 
 ```
