@@ -3,6 +3,7 @@
 // Maybe not.
 
 pub const Tokenizer = @import("tokenizer.zig");
+pub const parser = @import("parser.zig");
 
 // TODO: understand what in the world is this.
 // https://ziggit.dev/t/how-do-i-get-zig-build-to-run-all-the-tests/4434
