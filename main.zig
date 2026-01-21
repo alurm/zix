@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const root = @import("zix");
+const root = @import("root.zig");
 const Tokenizer = root.Tokenizer;
 
 // The current idea is to always go through root for everything.

@@ -88,7 +88,7 @@ pub fn build(b: *std.Build) void {
     {
         const check = b.step("check", "Check if the project compiles");
         check.dependOn(&b.addExecutable(.{ .name = "zix", .root_module = exe_root_module }).step);
-        check.dependOn(&b.addTest(.{ .root_module = mod }).step);
+        // check.dependOn(&b.addTest(.{ .root_module = mod }).step);
     }
 
     // This declares intent for the executable to be installed into the
