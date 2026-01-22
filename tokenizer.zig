@@ -73,9 +73,7 @@ pub const Token = union(enum) {
         }
     }
 
-    // TODO: stop using std.debug.print.
     // This function is kinda crappy but works.
-    /// Prints a line to stderr describing the given token using std.debug.print.
     pub fn print(token: Token, writer: *std.Io.Writer) !void {
         return switch (token) {
             inline .backslash,
@@ -192,11 +190,13 @@ fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.A
             },
             .after_space => switch (char) {
                 '\n' => {
-                    try result.append(
-                        allocator,
-                        .{ .comment = try comment.value.toOwnedSlice(allocator) },
-                    );
-                    // Without this just removing all the comment tokens might change the meaning.
+                    // For now, don't emit comments at all.
+                    // try result.append(
+                    //     allocator,
+                    //     .{ .comment = try comment.value.toOwnedSlice(allocator) },
+                    // );
+
+                    // Without this, just removing all the comment tokens might change the meaning.
                     try result.append(allocator, .newline);
                     tokenizer.state = .default;
                 },

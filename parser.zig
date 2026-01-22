@@ -1,11 +1,13 @@
 // Not sure if all the errdefers are correct.
 // Not sure if the code is correct in general.
+// TODO: add tests.
+// TODO: pretty print should be usable as {f} from Writer.print.
 
 const std = @import("std");
 
 const Tokenizer = @import("tokenizer.zig");
 
-const Block = struct {
+pub const Block = struct {
     statements: []const Statement,
 
     pub fn deinit(block: @This(), allocator: std.mem.Allocator) void {
@@ -42,7 +44,7 @@ const Block = struct {
     }
 };
 
-const Expression = union(enum) {
+pub const Expression = union(enum) {
     string: []const u8,
     block: Block,
     closure: Block,
@@ -88,12 +90,15 @@ const Expression = union(enum) {
                     errdefer allocator.free(get_as_string);
                     const get: Expression = .{ .string = get_as_string };
                     const string_as_expr: Expression = .{ .string = string };
-                    var get_string_dyn: std.ArrayList(Expression) = .empty;
-                    errdefer get_string_dyn.deinit(allocator);
-                    try get_string_dyn.append(allocator, get);
-                    try get_string_dyn.append(allocator, string_as_expr);
-                    const get_string = try get_string_dyn.toOwnedSlice(allocator);
-                    const stmt: Statement = .{ .expressions = get_string };
+                    var string_array_list: std.ArrayList(Expression) = .empty;
+                    errdefer string_array_list.deinit(allocator);
+                    try string_array_list.append(allocator, get);
+                    try string_array_list.append(allocator, string_as_expr);
+                    const string_slice = try string_array_list.toOwnedSlice(allocator);
+                    const stmt: Statement = .{
+                        .command = get,
+                        .arguments = string_slice,
+                    };
                     var stmts_dyn: std.ArrayList(Statement) = .empty;
                     errdefer stmts_dyn.deinit(allocator);
                     try stmts_dyn.append(allocator, stmt);
@@ -170,38 +175,49 @@ const Expression = union(enum) {
 };
 
 pub const Statement = struct {
-    expressions: []const Expression,
+    command: Expression,
+    arguments: []const Expression,
 
     pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
-        for (self.expressions) |item| item.deinit(allocator);
-        allocator.free(self.expressions);
+        self.command.deinit(allocator);
+        for (self.arguments) |item| item.deinit(allocator);
+        allocator.free(self.arguments);
     }
 
     pub fn parse(
         token_stream: *Tokenizer.Stream,
         allocator: std.mem.Allocator,
     ) !Statement {
-        var expressions: std.ArrayList(Expression) = .empty;
+        var command: ?Expression = null;
+        var arguments: std.ArrayList(Expression) = .empty;
+
         errdefer {
-            for (expressions.items) |item| item.deinit(allocator);
-            expressions.deinit(allocator);
+            if (command) |c| c.deinit(allocator);
+            for (arguments.items) |item| item.deinit(allocator);
+            arguments.deinit(allocator);
         }
 
         while (true) {
             switch (try token_stream.get(allocator, .peek)) {
+                // On newline: continue.
+                // On a closing paren: we are done.
                 inline .newline, .closing_paren => |_, tag| {
-                    if (tag == .newline) {
-                        (try token_stream.get(allocator, .next)).deinit(allocator);
-                        if (expressions.items.len == 0) continue;
-                    }
-                    return .{
-                        .expressions = try expressions.toOwnedSlice(allocator),
-                    };
+                    // We shouldn't consume closing parens.
+                    if (tag == .newline)
+                        (try token_stream.get(allocator, .next))
+                            .deinit(allocator);
+
+                    if (command) |cmd| return .{
+                        .command = cmd,
+                        .arguments = try arguments.toOwnedSlice(allocator),
+                    } else continue;
                 },
-                else => try expressions.append(allocator, try Expression.parse(
+                else => if (command) |_| try arguments.append(allocator, try Expression.parse(
                     token_stream,
                     allocator,
-                )),
+                )) else {
+                    command = try Expression.parse(token_stream, allocator);
+                },
             }
         }
     }
@@ -211,9 +227,10 @@ pub const Statement = struct {
         writer: *std.Io.Writer,
         depth: usize,
     ) !void {
-        for (self.expressions, 0..) |e, i| {
-            if (i != 0) try writer.print(" ", .{});
-            try e.pretty_print(writer, depth);
+        try self.command.pretty_print(writer, depth);
+        for (self.arguments) |argument| {
+            try writer.print(" ", .{});
+            try argument.pretty_print(writer, depth);
         }
     }
 };

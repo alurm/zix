@@ -9,6 +9,7 @@ const std = @import("std");
 
 const parser = @import("parser.zig");
 const Tokenizer = @import("tokenizer.zig");
+const Environment = @import("environment.zig");
 
 test {
     std.testing.refAllDecls(@This());
@@ -70,9 +71,9 @@ pub fn help(writer: *std.Io.Writer) !void {
     return writer.print(
         \\Zix 0.0.1
         \\
-        \\To exit, type a closing parenthesis followed by a newline.
+        \\To exit, type `)` (without backticks) followed by a newline.
         \\
-        \\Type `help` (without backticks) for help.
+        \\For help, type `help` (without backticks) followed by a newline.
         \\
     , .{});
 }
@@ -119,18 +120,55 @@ fn shell(
 
     try help(write);
 
+    var env: Environment = try .default(allocator);
+    defer {
+        var iterator = env.words.iterator();
+        while (iterator.next()) |entry| {
+            switch (entry.value_ptr.*) {
+                .string => |string| {
+                    allocator.free(string);
+                    // allocator.free(entry.key_ptr.*);
+                },
+                .builtin, .nothing => {},
+            }
+        }
+        env.words.deinit(allocator);
+    }
+
     while (true) {
         try write.print("\n", .{});
         try write.flush();
-        const statement = parser.Statement.parse(&token_stream, allocator) catch |e| switch (e) {
-            error.EndOfStream => return,
-            else => return e,
-        };
-        defer statement.deinit(allocator);
-        if (token_stream.peek_buffer()) |token|
+
+        // Not sure if this should be before or after parsing.
+        {
+            const token = token_stream.get(allocator, .peek) catch |e| switch (e) {
+                error.EndOfStream => return,
+                else => return e,
+            };
             if (token == .closing_paren) return;
-        try statement.pretty_print(write, 0);
-        try write.print("\n", .{});
+        }
+
+        const statement = try parser.Statement.parse(
+            &token_stream,
+            allocator,
+        );
+        defer statement.deinit(allocator);
+
+        // try statement.pretty_print(write, 0);
+        // try write.print("\n", .{});
+
+        // try write.print("{any}\n", .{statement});
+
+        // TODO: improve printing.
+        // TODO: check that $'foo' works.
+        // TODO: implement custom `get`.
+        // TODO: don't panic out of bounds in builtins.
+
+        try write.print("{any}\n", .{env.evaluate_statement(
+            allocator,
+            statement,
+        )});
+
         try write.flush();
     }
 }
