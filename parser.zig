@@ -79,13 +79,7 @@ const Expression = union(enum) {
                 _ = try token_stream.get(allocator, .next);
 
                 if (got_dollar_sign) {
-                    // $foo
-                    // $(get foo)
-                    // $(
-                    //   get foo
-                    // )
-                    // expr: get
-                    // expr: foo
+                    // Transform $x into $(get x).
 
                     // Not sure all the errdefers are correct.
 
@@ -200,7 +194,9 @@ pub const Statement = struct {
                         (try token_stream.get(allocator, .next)).deinit(allocator);
                         if (expressions.items.len == 0) continue;
                     }
-                    return .{ .expressions = try expressions.toOwnedSlice(allocator) };
+                    return .{
+                        .expressions = try expressions.toOwnedSlice(allocator),
+                    };
                 },
                 else => try expressions.append(allocator, try Expression.parse(
                     token_stream,
