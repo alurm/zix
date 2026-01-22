@@ -183,7 +183,7 @@ fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.A
     var result: std.ArrayList(Token) = .empty;
     errdefer result.deinit(allocator);
 
-    swich: switch (tokenizer.state) {
+    swtch: switch (tokenizer.state) {
         .comment => |*comment| switch (comment.state) {
             .expecting_space => switch (char) {
                 ' ' => comment.state = .after_space,
@@ -244,7 +244,7 @@ fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.A
                     });
                     // Analyze the current char again in the default state.
                     tokenizer.state = .default;
-                    continue :swich tokenizer.state;
+                    continue :swtch tokenizer.state;
                 },
             },
         },
@@ -265,7 +265,7 @@ fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.A
                 });
                 // Analyze the current char again in the default state.
                 tokenizer.state = .default;
-                continue :swich tokenizer.state;
+                continue :swtch tokenizer.state;
             },
             else => try bare_string.append(allocator, char),
         },

@@ -103,6 +103,11 @@ pub fn main() !void {
     try shell(write, read, &tokenizer, allocator);
 }
 
+// This is kinda awkward.
+pub const std_options: std.Options = .{
+    .fmt_max_depth = 10,
+};
+
 fn shell(
     write: *std.Io.Writer,
     read: *std.Io.Reader,

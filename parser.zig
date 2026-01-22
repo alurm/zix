@@ -115,6 +115,26 @@ const Expression = union(enum) {
         };
     }
 
+    fn string_needs_quoting(string: []const u8) bool {
+        // This part seems error prone.
+        // Compare with ./tokenizer.zig:/fn tokenize\(/
+        for (string) |c| switch (c) {
+            '\n',
+            '$',
+            '(',
+            ')',
+            '\\',
+            ';',
+            ' ',
+            '\t',
+            '\'',
+            '#',
+            => return true,
+            else => {},
+        };
+        return false;
+    }
+
     pub fn pretty_print(
         self: @This(),
         writer: *std.Io.Writer,
@@ -122,19 +142,33 @@ const Expression = union(enum) {
     ) error{WriteFailed}!void {
         switch (self) {
             .block, .closure => |it| {
+                const long = it.statements.len > 1;
                 if (self == .block) try writer.print("$", .{});
-                try writer.print("(\n", .{});
+                try writer.print("(", .{});
+                if (long) try writer.print("\n", .{});
                 for (it.statements) |item| {
-                    for (0..depth + 1) |_| try writer.print("\t", .{});
+                    if (long)
+                        for (0..depth + 1) |_|
+                            try writer.print("\t", .{});
                     try item.pretty_print(writer, depth + 1);
-                    try writer.print("\n", .{});
+                    if (long) try writer.print("\n", .{});
                 }
-                for (0..depth) |_| try writer.print("\t", .{});
+                if (long)
+                    for (0..depth) |_| try writer.print("\t", .{});
                 try writer.print(")", .{});
             },
             .string => |string| {
+                if (!string_needs_quoting(string)) {
+                    try writer.print("{s}", .{string});
+                    return;
+                }
                 try writer.print("'", .{});
-                for (string) |byte| try if (byte == '\'') writer.print("''", .{}) else writer.print("{c}", .{byte});
+                for (string) |byte|
+                    if (byte == '\'') {
+                        try writer.print("''", .{});
+                    } else {
+                        try writer.print("{c}", .{byte});
+                    };
                 try writer.print("'", .{});
             },
         }
@@ -162,7 +196,10 @@ pub const Statement = struct {
         while (true) {
             switch (try token_stream.get(allocator, .peek)) {
                 inline .newline, .closing_paren => |_, tag| {
-                    if (tag == .newline) (try token_stream.get(allocator, .next)).deinit(allocator);
+                    if (tag == .newline) {
+                        (try token_stream.get(allocator, .next)).deinit(allocator);
+                        if (expressions.items.len == 0) continue;
+                    }
                     return .{ .expressions = try expressions.toOwnedSlice(allocator) };
                 },
                 else => try expressions.append(allocator, try Expression.parse(
@@ -178,9 +215,9 @@ pub const Statement = struct {
         writer: *std.Io.Writer,
         depth: usize,
     ) !void {
-        for (self.expressions) |e| {
+        for (self.expressions, 0..) |e, i| {
+            if (i != 0) try writer.print(" ", .{});
             try e.pretty_print(writer, depth);
-            try writer.print(" ", .{});
         }
     }
 };
