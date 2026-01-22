@@ -170,5 +170,15 @@ fn shell(
         )});
 
         try write.flush();
+
+        const GC = @import("gc.zig");
+        var gc: GC = .init(allocator);
+        defer gc.deinit();
+        _ = try gc.alloc(.nothing, false);
+        _ = try gc.alloc(.nothing, false);
+        _ = try gc.alloc(.nothing, false);
+        _ = try gc.alloc(.nothing, false);
+        _ = try gc.alloc(.nothing, false);
+        _ = try gc.alloc(.nothing, false);
     }
 }
