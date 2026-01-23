@@ -156,7 +156,10 @@ pub const Stream = struct {
         swtch: switch (self.position < self.buffer.len) {
             true => {
                 const token = self.buffer[self.position];
-                if (mode == .next) self.position += 1;
+                switch (mode) {
+                    .next => self.position += 1,
+                    .peek => {},
+                }
                 return token;
             },
             false => {

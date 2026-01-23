@@ -9,49 +9,65 @@
 const std = @import("std");
 
 const Environment = @import("environment.zig");
+const Value = @import("value.zig").Value;
 
-// TODO: make this unmanaged?
-map: std.AutoHashMap(Handle, Entry),
+map: std.AutoHashMapUnmanaged(Handle, Entry),
 counter: usize,
 capacity: usize,
+mode: Mode,
 
 const Entry = struct {
-    value: Environment.Value,
+    value: Value,
     // Incremented when protected from collection.
     protections: usize,
     reachable: bool,
 };
 
-const Handle = enum(usize) { _ };
+pub const Handle = enum(usize) { _ };
 
-pub fn init(allocator: std.mem.Allocator) @This() {
+pub const Mode = enum {
+    // Collect when the amount of objects doubles.
+    default,
+    // Collect on each allocation.
+    aggressive,
+    // Don't collect.
+    disabled,
+};
+
+pub fn init(mode: Mode) @This() {
     return .{
         .counter = 0,
         .capacity = 0,
-        .map = .init(allocator),
+        .map = .empty,
+        .mode = mode,
     };
 }
 
-fn trace(allocator: std.mem.Allocator, value: Environment.Value) ![]const Handle {
+// Not sure if this is correct.
+fn trace(allocator: std.mem.Allocator, value: Value) ![]const Handle {
     var traces: std.ArrayList(Handle) = .empty;
 
     switch (value) {
         .nothing => {},
         .builtin => {},
         .string => {},
+        else => unreachable,
     }
 
     return traces.toOwnedSlice(allocator);
 }
 
-pub fn deinit(self: *@This()) void {
-    self.map.deinit();
+pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+    var iterator = self.map.valueIterator();
+    while (iterator.next()) |value| {
+        // Sus.
+        if (value.protections == 0) value.*.value.deinit(allocator, self);
+    }
+    self.map.deinit(allocator);
 }
 
-fn gc(self: *@This()) !void {
+fn gc(self: *@This(), allocator: std.mem.Allocator) !void {
     std.debug.print("gc\n", .{});
-
-    const allocator = self.map.allocator;
 
     // Add all protected objects to the queue and mark them as reachable.
     var queue = blk: {
@@ -79,46 +95,68 @@ fn gc(self: *@This()) !void {
     // Copy only reachable objects // and create a list of dead.
     // Maybe a new map is not needed, this is not clear to me.
     self.map = blk: {
-        var map: std.AutoHashMap(Handle, Entry) = .init(allocator);
+        var map: std.AutoHashMapUnmanaged(Handle, Entry) = .empty;
         var iterator = self.map.iterator();
         while (iterator.next()) |entry| if (entry.value_ptr.reachable) {
             var value = entry.value_ptr.*;
             value.reachable = false;
-            try map.put(entry.key_ptr.*, value);
+            try map.put(allocator, entry.key_ptr.*, value);
         } else {
             // Shouldn't values be deinited as well?
             // OwO.
             // How to deinit keys in other hashmaps...
             // I don't know.
-            entry.value_ptr.*.value.deinit(allocator);
+            // Self? This can go wrong?
+            entry.value_ptr.*.value.deinit(allocator, self);
         };
-        self.map.deinit();
+        self.map.deinit(allocator);
         break :blk map;
     };
     self.capacity = self.map.count() * 2 + 1;
 }
 
-pub fn alloc(self: *@This(), value: Environment.Value, protected: bool) !Handle {
-    // TODO: can have different modes to collect always or never.
-    if (self.map.count() > self.capacity) try self.gc();
+pub fn alloc(
+    self: *@This(),
+    allocator: std.mem.Allocator,
+    value: Value,
+    protection: enum { protected, unprotected },
+) !Handle {
+    switch (self.mode) {
+        .disabled => {},
+        .default => if (self.map.count() > self.capacity)
+            try self.gc(allocator),
+        .aggressive => try self.gc(allocator),
+    }
     self.counter += 1;
     const handle: Handle = @enumFromInt(self.counter);
-    try self.map.put(handle, .{
+    try self.map.put(allocator, handle, .{
         .value = value,
-        .protections = if (protected) 1 else 0,
+        .protections = switch (protection) {
+            .protected => 1,
+            .unprotected => 0,
+        },
         .reachable = false,
     });
     return handle;
 }
 
 pub fn protect(self: *@This(), value: Handle) void {
-    self.map.get(value).?.protections += 1;
+    self.map.getPtr(value).?.protections += 1;
+}
+
+// A convenience method.
+pub fn protected(self: *@This(), value: Handle) Handle {
+    self.protect(value);
+    return value;
 }
 
 pub fn unprotect(self: *@This(), value: Handle) void {
-    self.map.get(value).?.protections -= 1;
+    self.map.getPtr(value).?.protections -= 1;
 }
 
-pub fn get(self: *@This(), value: Handle) *Environment.Value {
-    return &self.map.getPtr(value).?.value;
+// Shouldn't this return by value?
+pub fn get(self: *@This(), value: Handle) *Value {
+    const ptr = self.map.getPtr(value).?;
+    std.debug.assert(ptr.protections != 0);
+    return &ptr.value;
 }

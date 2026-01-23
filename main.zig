@@ -7,9 +7,9 @@
 
 const std = @import("std");
 
+const Environment = @import("environment.zig");
 const parser = @import("parser.zig");
 const Tokenizer = @import("tokenizer.zig");
-const Environment = @import("environment.zig");
 
 test {
     std.testing.refAllDecls(@This());
@@ -120,19 +120,53 @@ fn shell(
 
     try help(write);
 
-    var env: Environment = try .default(allocator);
-    defer {
-        var iterator = env.words.iterator();
-        while (iterator.next()) |entry| {
-            switch (entry.value_ptr.*) {
-                .string => |string| {
-                    allocator.free(string);
-                    // allocator.free(entry.key_ptr.*);
-                },
-                .builtin, .nothing => {},
+    var env: Environment = try .init(allocator);
+    defer env.deinit(allocator);
+
+    // This (including defers is a mess).
+    // Shouldn't be here.
+    // Also, env.deinit should do more? Or less? I don't know.
+    // Bad mess.
+    {
+        const builtins = @import("builtins.zig");
+
+        const decls = @typeInfo(builtins).@"struct".decls;
+
+        comptime var array: [decls.len]struct {
+            name: []const u8,
+            value: builtins.Builtin,
+        } = undefined;
+
+        inline for (decls, 0..) |decl, i| {
+            const name = decl.name;
+            const field = @field(builtins, name);
+            switch (@typeInfo(@TypeOf(field))) {
+                .@"fn" => array[i] = .{ .name = name, .value = field },
+                else => {},
             }
         }
-        env.words.deinit(allocator);
+
+        const Gc = @import("gc.zig");
+
+        var handles: [decls.len]Gc.Handle = undefined;
+
+        // OOM is not handled here.
+
+        for (array, 0..) |builtin, i| {
+            const handle = try env.gc.alloc(
+                allocator,
+                .{ .builtin = builtin.value },
+                .protected,
+            );
+            handles[i] = handle;
+            try env.context.words.put(
+                allocator,
+                try allocator.dupe(u8, builtin.name),
+                handle,
+            );
+        }
+
+        // break :blk handles;
     }
 
     while (true) {
@@ -148,14 +182,12 @@ fn shell(
             if (token == .closing_paren) return;
         }
 
-        const statement = try parser.Statement.parse(
+        var statement = try parser.Statement.parse(
             &token_stream,
             allocator,
         );
+        defer allocator.destroy(statement);
         defer statement.deinit(allocator);
-
-        // try statement.pretty_print(write, 0);
-        // try write.print("\n", .{});
 
         // try write.print("{any}\n", .{statement});
 
@@ -163,22 +195,40 @@ fn shell(
         // TODO: check that $'foo' works.
         // TODO: implement custom `get`.
         // TODO: don't panic out of bounds in builtins.
+        // TODO: detect leaks.
 
-        try write.print("{any}\n", .{env.evaluate_statement(
+        const handle = env.evaluate_statement(
             allocator,
             statement,
-        )});
+        ) catch |err| switch (err) {
+            error.BadArgumentCount,
+            error.WordNotDefined,
+            error.BadArgumentType,
+            error.ValueOfCommandIsString,
+            error.ValueOfCommandIsNothing,
+            error.ExpressionTypeNotImplemented,
+            error.CommandNotFound,
+            => {
+                try write.print("{}\n", .{err});
+                continue;
+            },
+
+            else => return err,
+        };
+        defer env.gc.unprotect(handle);
+
+        try write.print("{f}\n", .{env.gc.get(handle)});
 
         try write.flush();
 
-        const GC = @import("gc.zig");
-        var gc: GC = .init(allocator);
-        defer gc.deinit();
-        _ = try gc.alloc(.nothing, false);
-        _ = try gc.alloc(.nothing, false);
-        _ = try gc.alloc(.nothing, false);
-        _ = try gc.alloc(.nothing, false);
-        _ = try gc.alloc(.nothing, false);
-        _ = try gc.alloc(.nothing, false);
+        // const Gc = @import("gc.zig");
+        // var gc: Gc = .init(.default);
+        // defer gc.deinit(allocator);
+        // _ = try gc.alloc(allocator, .nothing, .unprotected);
+        // _ = try gc.alloc(allocator, .nothing, .unprotected);
+        // _ = try gc.alloc(allocator, .nothing, .unprotected);
+        // _ = try gc.alloc(allocator, .nothing, .unprotected);
+        // _ = try gc.alloc(allocator, .nothing, .unprotected);
+        // _ = try gc.alloc(allocator, .nothing, .unprotected);
     }
 }

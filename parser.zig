@@ -2,17 +2,30 @@
 // Not sure if the code is correct in general.
 // TODO: add tests.
 // TODO: pretty print should be usable as {f} from Writer.print.
+// I'm not sure if refcounting is enough.
 
 const std = @import("std");
 
 const Tokenizer = @import("tokenizer.zig");
 
 pub const Block = struct {
-    statements: []const Statement,
+    ref_count: usize,
 
-    pub fn deinit(block: @This(), allocator: std.mem.Allocator) void {
-        for (block.statements) |statement| statement.deinit(allocator);
-        allocator.free(block.statements);
+    statements: []*Statement,
+
+    pub fn deinit(block: *@This(), allocator: std.mem.Allocator) void {
+        block.ref_count -= 1;
+
+        if (block.ref_count == 0) {
+            for (block.statements) |statement| {
+                statement.deinit(allocator);
+                allocator.destroy(statement);
+            }
+            allocator.free(block.statements);
+
+            // ???
+            allocator.destroy(block);
+        }
     }
 
     pub fn parse(
@@ -22,8 +35,8 @@ pub const Block = struct {
         ReadFailed,
         EndOfStream,
         OutOfMemory,
-    } || ParsingError)!@This() {
-        var statements: std.ArrayList(Statement) = .empty;
+    } || ParsingError)!*Block {
+        var statements: std.ArrayList(*Statement) = .empty;
         errdefer {
             for (statements.items) |item| item.deinit(allocator);
             statements.deinit(allocator);
@@ -33,7 +46,12 @@ pub const Block = struct {
             switch (try token_stream.get(allocator, .peek)) {
                 .closing_paren => {
                     (try token_stream.get(allocator, .next)).deinit(allocator);
-                    return .{ .statements = try statements.toOwnedSlice(allocator) };
+                    const result = try allocator.create(Block);
+                    result.* = .{
+                        .statements = try statements.toOwnedSlice(allocator),
+                        .ref_count = 1,
+                    };
+                    return result;
                 },
                 else => try statements.append(allocator, try Statement.parse(
                     token_stream,
@@ -46,19 +64,21 @@ pub const Block = struct {
 
 pub const Expression = union(enum) {
     string: []const u8,
-    block: Block,
-    closure: Block,
+    block: *Block,
+    closure: *Block,
 
-    pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
-        switch (self) {
+    pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+        switch (self.*) {
             .string => |string| allocator.free(string),
-            .block, .closure => |block| block.deinit(allocator),
+            .block, .closure => |block| {
+                block.deinit(allocator);
+            },
         }
     }
     pub fn parse(
         token_stream: *Tokenizer.Stream,
         allocator: std.mem.Allocator,
-    ) !@This() {
+    ) !*Expression {
         var got_dollar_sign = false;
         return swtch: switch (try token_stream.get(allocator, .peek)) {
             .dollar_sign => {
@@ -75,7 +95,9 @@ pub const Expression = union(enum) {
                 // if (newline != .newline)
                 //     return error.ExpectedNewlineTokenAfterOpeningParenToken;
                 const block = try Block.parse(token_stream, allocator);
-                return if (got_dollar_sign) .{ .block = block } else .{ .closure = block };
+                const result = try allocator.create(Expression);
+                result.* = if (got_dollar_sign) .{ .block = block } else .{ .closure = block };
+                return result;
             },
             .string => |string| {
                 _ = try token_stream.get(allocator, .next);
@@ -88,25 +110,39 @@ pub const Expression = union(enum) {
                     errdefer allocator.free(string);
                     const get_as_string = try allocator.dupe(u8, "get");
                     errdefer allocator.free(get_as_string);
-                    const get: Expression = .{ .string = get_as_string };
-                    const string_as_expr: Expression = .{ .string = string };
-                    var string_array_list: std.ArrayList(Expression) = .empty;
+                    const get_e: Expression = .{ .string = get_as_string };
+                    const get = try allocator.create(Expression);
+                    get.* = get_e;
+                    const string_as_expr_e: Expression = .{ .string = string };
+                    const string_as_expr = try allocator.create(Expression);
+                    string_as_expr.* = string_as_expr_e;
+                    var string_array_list: std.ArrayList(*Expression) = .empty;
                     errdefer string_array_list.deinit(allocator);
-                    try string_array_list.append(allocator, get);
                     try string_array_list.append(allocator, string_as_expr);
                     const string_slice = try string_array_list.toOwnedSlice(allocator);
-                    const stmt: Statement = .{
+                    const stmt_s: Statement = .{
                         .command = get,
                         .arguments = string_slice,
                     };
-                    var stmts_dyn: std.ArrayList(Statement) = .empty;
+                    const stmt = try allocator.create(Statement);
+                    stmt.* = stmt_s;
+                    var stmts_dyn: std.ArrayList(*Statement) = .empty;
                     errdefer stmts_dyn.deinit(allocator);
                     try stmts_dyn.append(allocator, stmt);
                     const stmts = try stmts_dyn.toOwnedSlice(allocator);
-                    const block: Block = .{ .statements = stmts };
-                    return .{ .block = block };
+                    const block_b: Block = .{
+                        .statements = stmts,
+                        .ref_count = 1,
+                    };
+                    const block = try allocator.create(Block);
+                    block.* = block_b;
+                    const result = try allocator.create(Expression);
+                    result.* = .{ .block = block };
+                    return result;
                 }
-                return .{ .string = string };
+                const result = try allocator.create(Expression);
+                result.* = .{ .string = string };
+                return result;
             },
             else => {
                 return error.UnexpectedTokenWhileParsingExpression;
@@ -175,21 +211,27 @@ pub const Expression = union(enum) {
 };
 
 pub const Statement = struct {
-    command: Expression,
-    arguments: []const Expression,
+    command: *Expression,
+    arguments: []*Expression,
 
-    pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
         self.command.deinit(allocator);
-        for (self.arguments) |item| item.deinit(allocator);
+        allocator.destroy(self.command);
+
+        for (self.arguments) |argument| {
+            argument.deinit(allocator);
+            allocator.destroy(argument);
+        }
+
         allocator.free(self.arguments);
     }
 
     pub fn parse(
         token_stream: *Tokenizer.Stream,
         allocator: std.mem.Allocator,
-    ) !Statement {
-        var command: ?Expression = null;
-        var arguments: std.ArrayList(Expression) = .empty;
+    ) !*Statement {
+        var command: ?*Expression = null;
+        var arguments: std.ArrayList(*Expression) = .empty;
 
         errdefer {
             if (command) |c| c.deinit(allocator);
@@ -207,9 +249,13 @@ pub const Statement = struct {
                         (try token_stream.get(allocator, .next))
                             .deinit(allocator);
 
-                    if (command) |cmd| return .{
-                        .command = cmd,
-                        .arguments = try arguments.toOwnedSlice(allocator),
+                    if (command) |cmd| {
+                        const result = try allocator.create(Statement);
+                        result.* = .{
+                            .command = cmd,
+                            .arguments = try arguments.toOwnedSlice(allocator),
+                        };
+                        return result;
                     } else continue;
                 },
                 else => if (command) |_| try arguments.append(allocator, try Expression.parse(
