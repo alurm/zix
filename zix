@@ -1,1 +1,2 @@
-./zig-out/bin/zix
+#!/bin/sh
+exec rlwrap zig build run -- "$@"

@@ -60,7 +60,7 @@ pub const Value = union(enum) {
     pub fn format(self: @This(), writer: *std.Io.Writer) std.Io.Writer.Error!void {
         return switch (self) {
             // Should pretty print.
-            .string => |string| writer.print("{s}", .{string}),
+            .string => |string| Parser.pretty_print_string(writer, string),
             // Should be removed.
             .nothing => writer.print("<nothing>", .{}),
             // Bad.

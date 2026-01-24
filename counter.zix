@@ -1,4 +1,4 @@
-global make-counter (
+let make-counter (
 	let count 0
 	<= (
 		set count $(add $count 1)
@@ -7,9 +7,3 @@ global make-counter (
 )
 
 global counter $(make-counter)
-
-loop (
-	let 'current count' $(counter)
-	echo $'current count'
-	'same strings?' false $('same strings?' $'current count' 10)
-)

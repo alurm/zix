@@ -175,7 +175,7 @@ pub const Expression = union(enum) {
             => return true,
             else => {},
         };
-        return false;
+        return string.len == 0;
     }
 
     pub fn pretty_print(
@@ -200,23 +200,26 @@ pub const Expression = union(enum) {
                     for (0..depth) |_| try writer.print("\t", .{});
                 try writer.print(")", .{});
             },
-            .string => |string| {
-                if (!string_needs_quoting(string)) {
-                    try writer.print("{s}", .{string});
-                    return;
-                }
-                try writer.print("'", .{});
-                for (string) |byte|
-                    if (byte == '\'') {
-                        try writer.print("''", .{});
-                    } else {
-                        try writer.print("{c}", .{byte});
-                    };
-                try writer.print("'", .{});
-            },
+            .string => |string| pretty_print_string(writer, string),
         }
     }
 };
+
+// Should be somewhere else
+pub fn pretty_print_string(writer: *std.Io.Writer, string: []const u8) !void {
+    if (!Expression.string_needs_quoting(string)) {
+        try writer.print("{s}", .{string});
+        return;
+    }
+    try writer.print("'", .{});
+    for (string) |byte|
+        if (byte == '\'') {
+            try writer.print("''", .{});
+        } else {
+            try writer.print("{c}", .{byte});
+        };
+    try writer.print("'", .{});
+}
 
 pub const Statement = struct {
     // Not sure if pointers are warranted here.

@@ -72,17 +72,14 @@ pub fn help(writer: *std.Io.Writer) !void {
         \\Zix 0.0.1
         \\
         \\To exit, type `)`.
+        \\To get help, type `help`.
         \\
-        \\# Getting help
+        \\# Notes on starting Zix
         \\
-        \\Type `help`. For a list of builtin commands, type `builtins`.
+        \\To start Zix in batch mode: `zix < program.zix`.
+        \\To start Zix in interactive mode: `zix [<files>...]`. Files are evaluated before a prompt is shown.
         \\
-        \\# Ways to start Zix in a Unix shell
-        \\
-        \\- To run a program with Zix: `zix < program.zix`.
-        \\- To start Zix in an interactive mode: `zix <files>`.
-        \\
-        \\(An optional list of files to evaluate before showing a prompt can be given.)
+        \\---
         \\
     , .{});
 }
@@ -249,17 +246,18 @@ fn interactive(
     token_stream: *Tokenizer.Stream,
     env: *Environment,
 ) !void {
+    try help(writer);
+
     // Don't just do 1..! It's rude. OwO.
     for (std.os.argv[1..]) |path_z| {
-        std.debug.print("path: {s}\n", .{path_z});
+        // std.debug.print("path: {s}\n", .{path_z});
 
         const path = std.mem.sliceTo(path_z, 0);
 
         var reader_buffer: [buffer_size]u8 = undefined;
-        const file = try std.fs.cwd().openFile(path, .{
-            .mode = .read_only,
-        });
+        const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
         defer file.close();
+
         var reader_object = std.fs.File.reader(file, &reader_buffer);
         const reader = &reader_object.interface;
 
@@ -267,6 +265,7 @@ fn interactive(
         defer tokenizer.deinit(allocator);
 
         var file_token_stream: Tokenizer.Stream = .init(reader, &tokenizer);
+        defer file_token_stream.deinit(allocator);
 
         var block = try parser.Block.parse(
             &file_token_stream,
@@ -276,8 +275,6 @@ fn interactive(
 
         env.gc.unprotect(try env.evaluate_block(allocator, block));
     }
-
-    try help(writer);
 
     while (true) {
         try writer.print("\n", .{});

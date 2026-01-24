@@ -207,6 +207,7 @@ fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.A
                     //     allocator,
                     //     .{ .comment = try comment.value.toOwnedSlice(allocator) },
                     // );
+                    comment.value.deinit(allocator);
 
                     // Without this, just removing all the comment tokens might change the meaning.
                     try result.append(allocator, .newline);

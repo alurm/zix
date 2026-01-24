@@ -17,10 +17,13 @@ const std = @import("std");
 
 const Environment = @import("environment.zig");
 const Gc = @import("gc.zig");
+const Parser = @import("parser.zig");
 const Value = @import("value.zig").Value;
+const values = @import("value.zig");
 
 // This error handling is terrible, I think.
 pub const Error = error{
+    BadArgument,
     BadArgumentCount,
     WordNotDefined,
     BadArgumentType,
@@ -80,8 +83,6 @@ pub fn loop(
 }
 
 // Bruh...
-const values = @import("value.zig");
-
 // Move.
 fn evaluate_closure(
     allocator: std.mem.Allocator,
@@ -104,12 +105,22 @@ pub fn builtins(
     const decls = @typeInfo(@This()).@"struct".decls;
 
     inline for (decls) |decl| {
-        if (@typeInfo(@TypeOf(@field(@This(), decl.name))) == .@"fn")
-            try env.writer.print("{s}\n", .{decl.name});
+        if (@typeInfo(@TypeOf(@field(@This(), decl.name))) == .@"fn") {
+            try Parser.pretty_print_string(env.writer, decl.name);
+            try env.writer.print("\n", .{});
+        }
     }
 
     return env.gc.alloc(allocator, .nothing, .protected);
 }
+
+// pub fn @"!"(
+//     allocator: std.mem.Allocator,
+//     env: *Environment,
+//     arguments: []Gc.Handle,
+// ) Error!Gc.Handle {
+//     std.process.run;
+// }
 
 // TODO: improve this.
 pub fn help(
@@ -143,7 +154,10 @@ pub fn help(
             var iterator = context.words.keyIterator();
 
             while (iterator.next()) |word| {
-                try env.writer.print("word: {s}\n", .{word.*});
+                // Use {f} please.
+                try Parser.pretty_print_string(env.writer, word.*);
+                try env.writer.print("\n", .{});
+                try env.writer.flush();
             }
 
             maybe_context = context.parent;
@@ -153,7 +167,37 @@ pub fn help(
     return env.gc.alloc(allocator, .nothing, .protected);
 }
 
-pub fn @"same strings?"(
+pub fn not(
+    allocator: std.mem.Allocator,
+    env: *Environment,
+    arguments: []Gc.Handle,
+) Error!Gc.Handle {
+    if (arguments.len != 1) return error.BadArgumentCount;
+
+    const value = env.gc.get(arguments[0]).*;
+
+    if (value != .string) return error.BadArgumentType;
+
+    const string = value.string;
+
+    if (std.mem.eql(u8, string, "true"))
+        return env.gc.alloc(
+            allocator,
+            .{ .string = try allocator.dupe(u8, "false") },
+            .protected,
+        );
+
+    if (std.mem.eql(u8, string, "false"))
+        return env.gc.alloc(
+            allocator,
+            .{ .string = try allocator.dupe(u8, "true") },
+            .protected,
+        );
+
+    return error.BadArgument;
+}
+
+pub fn @"same?"(
     allocator: std.mem.Allocator,
     env: *Environment,
     arguments: []Gc.Handle,
