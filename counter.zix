@@ -8,8 +8,8 @@ let make-counter (
 
 let counter $(make-counter)
 
-echo $(counter)
-echo $(counter)
-echo $(counter)
-
-()
+loop (
+	let 'current count' $(counter)
+	echo $'current count'
+	'same strings?' false $('same strings?' $'current count' 10)
+)

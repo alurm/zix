@@ -11,11 +11,13 @@
 // - string is?
 // - while
 // - list?
+// - call (requires some form of a list)
 
 const std = @import("std");
 
 const Environment = @import("environment.zig");
 const Gc = @import("gc.zig");
+const Value = @import("value.zig").Value;
 
 // This error handling is terrible, I think.
 pub const Error = error{
@@ -26,6 +28,11 @@ pub const Error = error{
     InvalidBase,
     InvalidCharacter,
     WriteFailed,
+    ValueOfCommandIsString,
+    ValueOfCommandIsNothing,
+    CommandNotFound,
+    ExpressionTypeNotImplemented,
+    EvaluationOfClosuresIsNotImplemented,
 };
 
 pub const Builtin = *const fn (
@@ -33,6 +40,59 @@ pub const Builtin = *const fn (
     env: *Environment,
     arguments: []Gc.Handle,
 ) Error!Gc.Handle;
+
+// Dedup this with evaluate_statement.
+// Can arguments get mutated during execution of condition?
+// Is this UB?
+pub fn loop(
+    allocator: std.mem.Allocator,
+    env: *Environment,
+    arguments: []Gc.Handle,
+) Error!Gc.Handle {
+    if (arguments.len != 1)
+        return error.BadArgumentCount;
+    // const condition_handle, const body_handle = arguments[0..2].*;
+    // var value: Value = undefined;
+    // value = env.gc.get(condition_handle).*;
+    var value = env.gc.get(arguments[0]).*;
+    // Hack, not correct.
+    if (value != .closure) return error.BadArgumentType;
+    const condition = value.closure;
+    // value = env.gc.get(body_handle).*;
+    // if (value != .closure) return error.BadArgumentType;
+    // const body = value.closure;
+
+    while (true) {
+        const handle = try evaluate_closure(allocator, env, condition);
+        defer env.gc.unprotect(handle);
+        value = env.gc.get(handle).*;
+        switch (value) {
+            // .nothing => return env.gc.alloc(allocator, .nothing, .protected),
+            // Broooo I don't know.
+            .string => |string| {
+                if (std.mem.eql(u8, string, "false")) break;
+            },
+            else => {},
+        }
+    }
+
+    return env.gc.alloc(allocator, .nothing, .protected);
+}
+
+// Bruh...
+const values = @import("value.zig");
+
+// Move.
+fn evaluate_closure(
+    allocator: std.mem.Allocator,
+    env: *Environment,
+    closure: values.Closure,
+) !Gc.Handle {
+    const old_context = env.context;
+    defer env.context = old_context;
+    env.context = closure.context;
+    return Environment.evaluate_block(env, allocator, closure.block);
+}
 
 // Should return a list?
 // Namespacing...
