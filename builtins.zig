@@ -254,6 +254,34 @@ pub fn let(
     return env.gc.alloc(allocator, .nothing, .protected);
 }
 
+// Bruh!!!
+// Dedup with let and others!
+pub fn global(
+    allocator: std.mem.Allocator,
+    env: *Environment,
+    arguments: []Gc.Handle,
+) Error!Gc.Handle {
+    if (arguments.len != 2) return error.BadArgumentCount;
+    const word = blk: switch (env.gc.get(arguments[0]).*) {
+        .string => |string| {
+            break :blk try allocator.dupe(u8, string);
+        },
+        else => return error.BadArgumentType,
+    };
+
+    const value = arguments[1];
+
+    // &&&&????
+    var context = &env.gc.get(env.context).context;
+
+    while (context.parent) |parent| {
+        context = &env.gc.get(parent).context;
+    }
+
+    try context.words.put(allocator, word, value);
+    return env.gc.alloc(allocator, .nothing, .protected);
+}
+
 // Concat? UwU.
 // Pass gc individually from env?
 // Env is not needed everywhere.

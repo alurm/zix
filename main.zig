@@ -73,8 +73,16 @@ pub fn help(writer: *std.Io.Writer) !void {
         \\
         \\To exit, type `)`.
         \\
-        \\For help, type `help`.
-        \\For a list of builtin commands, type `builtins`.
+        \\# Getting help
+        \\
+        \\Type `help`. For a list of builtin commands, type `builtins`.
+        \\
+        \\# Ways to start Zix in a Unix shell
+        \\
+        \\- To run a program with Zix: `zix < program.zix`.
+        \\- To start Zix in an interactive mode: `zix <files>`.
+        \\
+        \\(An optional list of files to evaluate before showing a prompt can be given.)
         \\
     , .{});
 }
@@ -202,6 +210,7 @@ fn shell(
         allocator,
         &token_stream,
         &env,
+        .print,
     );
 }
 
@@ -212,6 +221,8 @@ fn non_interactive(
     allocator: std.mem.Allocator,
     token_stream: *Tokenizer.Stream,
     env: *Environment,
+    // This is a hack.
+    mode: enum { print, silent },
 ) !void {
     var block = try parser.Block.parse(
         token_stream,
@@ -226,7 +237,7 @@ fn non_interactive(
     defer env.gc.unprotect(handle);
     // Hacky?
     const value = env.gc.get(handle);
-    if (value.* != .nothing) {
+    if (mode == .print and value.* != .nothing) {
         try writer.print("{f}\n", .{env.gc.get(handle)});
         try writer.flush();
     }
@@ -238,6 +249,34 @@ fn interactive(
     token_stream: *Tokenizer.Stream,
     env: *Environment,
 ) !void {
+    // Don't just do 1..! It's rude. OwO.
+    for (std.os.argv[1..]) |path_z| {
+        std.debug.print("path: {s}\n", .{path_z});
+
+        const path = std.mem.sliceTo(path_z, 0);
+
+        var reader_buffer: [buffer_size]u8 = undefined;
+        const file = try std.fs.cwd().openFile(path, .{
+            .mode = .read_only,
+        });
+        defer file.close();
+        var reader_object = std.fs.File.reader(file, &reader_buffer);
+        const reader = &reader_object.interface;
+
+        var tokenizer: Tokenizer = .{};
+        defer tokenizer.deinit(allocator);
+
+        var file_token_stream: Tokenizer.Stream = .init(reader, &tokenizer);
+
+        var block = try parser.Block.parse(
+            &file_token_stream,
+            allocator,
+        );
+        defer block.deinit(allocator);
+
+        env.gc.unprotect(try env.evaluate_block(allocator, block));
+    }
+
     try help(writer);
 
     while (true) {

@@ -1,4 +1,4 @@
-let make-counter (
+global make-counter (
 	let count 0
 	<= (
 		set count $(add $count 1)
@@ -6,7 +6,7 @@ let make-counter (
 	)
 )
 
-let counter $(make-counter)
+global counter $(make-counter)
 
 loop (
 	let 'current count' $(counter)
