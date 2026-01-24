@@ -10,7 +10,7 @@ const Gc = @import("gc.zig");
 
 pub const Closure = struct {
     block: *Parser.Block,
-    context: *Environment.Context,
+    context: Gc.Handle,
 };
 
 pub const Value = union(enum) {
@@ -21,7 +21,10 @@ pub const Value = union(enum) {
 
     closure: Closure,
 
-    pub fn deinit(value: *@This(), allocator: std.mem.Allocator, gc: *Gc) void {
+    context: Environment.Context,
+
+    pub fn deinit(value: *@This(), allocator: std.mem.Allocator) void {
+        // std.debug.print("value.deinit\n", .{});
         switch (value.*) {
             .string => |string| {
                 allocator.free(string);
@@ -37,8 +40,18 @@ pub const Value = union(enum) {
                 closure.block.deinit(allocator);
                 // allocator.destroy(closure.block);
                 // This can go wrong?
-                closure.context.deinit(allocator, gc);
                 // allocator.destroy(closure.context);
+            },
+            .context => |*context| {
+                // Must stop protecting context values.
+
+                var iterator = context.words.keyIterator();
+
+                while (iterator.next()) |word| {
+                    allocator.free(word.*);
+                }
+
+                context.words.deinit(allocator);
             },
         }
     }
@@ -54,6 +67,7 @@ pub const Value = union(enum) {
             .builtin => writer.print("<builtin>", .{}),
             // Bad.
             .closure => writer.print("<closure>", .{}),
+            .context => unreachable,
         };
     }
 };

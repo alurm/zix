@@ -121,7 +121,9 @@ fn shell(
     try help(write);
 
     var env: Environment = try .init(allocator);
-    defer env.deinit(allocator);
+
+    // This is bad.
+    defer env.deinit(allocator) catch unreachable;
 
     // This (including defers is a mess).
     // Shouldn't be here.
@@ -153,13 +155,20 @@ fn shell(
         // OOM is not handled here.
 
         for (array, 0..) |builtin, i| {
+            // > unprotected
+            // Shouldn't be an issue if we immediately put it into context.
+            // Which we do.
             const handle = try env.gc.alloc(
                 allocator,
                 .{ .builtin = builtin.value },
-                .protected,
+                .unprotected,
             );
+
             handles[i] = handle;
-            try env.context.words.put(
+
+            const context = &env.gc.get(env.context).context;
+
+            try context.words.put(
                 allocator,
                 try allocator.dupe(u8, builtin.name),
                 handle,

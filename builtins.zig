@@ -1,3 +1,9 @@
+// # Wanted builtins
+//
+// - set
+// - cat, ..
+// - del?
+
 const std = @import("std");
 
 const Environment = @import("environment.zig");
@@ -27,11 +33,30 @@ pub fn get(
     if (arguments.len != 1) return error.BadArgumentCount;
     switch (env.gc.get(arguments[0]).*) {
         .string => |word| if (env.lookup(word)) |value|
-            return env.gc.protected(value)
+            return env.gc.protected(value.*)
         else
             return error.WordNotDefined,
         else => return error.BadArgumentType,
     }
+}
+
+// Error handling is terrible!
+
+pub fn set(
+    allocator: std.mem.Allocator,
+    env: *Environment,
+    arguments: []Gc.Handle,
+) Error!Gc.Handle {
+    if (arguments.len != 2) return error.BadArgumentCount;
+
+    switch (env.gc.get(arguments[0]).*) {
+        .string => |word| if (env.lookup(word)) |slot| {
+            slot.* = arguments[1];
+        } else return error.WordNotDefined,
+        else => return error.BadArgumentType,
+    }
+
+    return env.gc.alloc(allocator, .nothing, .protected);
 }
 
 pub fn @"=>"(
@@ -55,8 +80,12 @@ pub fn let(
         },
         else => return error.BadArgumentType,
     };
-    const value = env.gc.protected(arguments[1]);
-    try env.context.words.put(allocator, word, value);
+    // Value doesn't need protection, I think.
+    // We put it into the stack immediately.
+    const value = arguments[1];
+    // Does this compile without &?
+    const context = &env.gc.get(env.context).context;
+    try context.words.put(allocator, word, value);
     return env.gc.alloc(allocator, .nothing, .protected);
 }
 

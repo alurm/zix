@@ -11,20 +11,21 @@ const Tokenizer = @import("tokenizer.zig");
 pub const Block = struct {
     ref_count: usize,
 
+    // Not sure if pointers are warranted here.
     statements: []*Statement,
 
-    pub fn deinit(block: *@This(), allocator: std.mem.Allocator) void {
-        block.ref_count -= 1;
+    pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+        self.ref_count -= 1;
 
-        if (block.ref_count == 0) {
-            for (block.statements) |statement| {
+        if (self.ref_count == 0) {
+            for (self.statements) |statement| {
                 statement.deinit(allocator);
                 allocator.destroy(statement);
             }
-            allocator.free(block.statements);
+            allocator.free(self.statements);
 
             // ???
-            allocator.destroy(block);
+            allocator.destroy(self);
         }
     }
 
@@ -43,7 +44,8 @@ pub const Block = struct {
         }
 
         while (true) {
-            switch (try token_stream.get(allocator, .peek)) {
+            // I'm not sure I like the name "swtch".
+            swtch: switch (try token_stream.get(allocator, .peek)) {
                 .closing_paren => {
                     (try token_stream.get(allocator, .next)).deinit(allocator);
                     const result = try allocator.create(Block);
@@ -52,6 +54,11 @@ pub const Block = struct {
                         .ref_count = 1,
                     };
                     return result;
+                },
+                // I'm not sure if this is correct.
+                .newline => {
+                    (try token_stream.get(allocator, .next)).deinit(allocator);
+                    continue :swtch try token_stream.get(allocator, .peek);
                 },
                 else => try statements.append(allocator, try Statement.parse(
                     token_stream,
@@ -102,6 +109,7 @@ pub const Expression = union(enum) {
             .string => |string| {
                 _ = try token_stream.get(allocator, .next);
 
+                // I'm not sure I like this transformation.
                 if (got_dollar_sign) {
                     // Transform $x into $(get x).
 
@@ -211,6 +219,7 @@ pub const Expression = union(enum) {
 };
 
 pub const Statement = struct {
+    // Not sure if pointers are warranted here.
     command: *Expression,
     arguments: []*Expression,
 
@@ -241,6 +250,12 @@ pub const Statement = struct {
 
         while (true) {
             switch (try token_stream.get(allocator, .peek)) {
+                // Dunno if this is correct, actually.
+                // (
+                // )
+                // fofof
+                // )
+                //
                 // On newline: continue.
                 // On a closing paren: we are done.
                 inline .newline, .closing_paren => |_, tag| {

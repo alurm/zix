@@ -13,7 +13,7 @@ const Value = @import("value.zig").Value;
 
 map: std.AutoHashMapUnmanaged(Handle, Entry),
 counter: usize,
-capacity: usize,
+limit: usize,
 mode: Mode,
 
 const Entry = struct {
@@ -37,13 +37,17 @@ pub const Mode = enum {
 pub fn init(mode: Mode) @This() {
     return .{
         .counter = 0,
-        .capacity = 0,
+        .limit = 0,
         .map = .empty,
         .mode = mode,
     };
 }
 
+// Remove pointers where they are not needed.
+
 // Not sure if this is correct.
+// Wait, collect for a closure would have to go through all stack frames.
+// This is bad.
 fn trace(allocator: std.mem.Allocator, value: Value) ![]const Handle {
     var traces: std.ArrayList(Handle) = .empty;
 
@@ -51,23 +55,52 @@ fn trace(allocator: std.mem.Allocator, value: Value) ![]const Handle {
         .nothing => {},
         .builtin => {},
         .string => {},
-        else => unreachable,
+        .closure => |closure| {
+            try traces.append(allocator, closure.context);
+        },
+        .context => |context| {
+            if (context.parent) |parent|
+                try traces.append(allocator, parent);
+            var iterator = context.words.valueIterator();
+            while (iterator.next()) |word| {
+                try traces.append(allocator, word.*);
+            }
+        },
+        // else => unreachable,
     }
 
     return traces.toOwnedSlice(allocator);
 }
 
-pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+pub fn deinit(self: *@This(), allocator: std.mem.Allocator) !void {
+    // Is this correct?
+    try self.gc(allocator);
+
     var iterator = self.map.valueIterator();
     while (iterator.next()) |value| {
         // Sus.
-        if (value.protections == 0) value.*.value.deinit(allocator, self);
+        // (No longer sus, since self isn't passed.)
+        if (value.protections == 0) value.value.deinit(allocator);
     }
     self.map.deinit(allocator);
 }
 
+// Problem statement.
+//
+// Closures increment the ref count of the surrounding stack frame.
+// This prevents the surrounding context to be deinitialized, this is good.
+// But if the closure is stored in the stack frame, then the closure is not collected by the garbage collector.
+//
+// A closure prevents stack frame from being collected.
+// A ctack frame prevents closure from being collected.
+//
+// Garbage collectors exist to solve such issues.
+//
+// Solution: make stack frames garbage collected.
+// During execution, a stack frame is marked as protected, preventing it from being collected.
+
 fn gc(self: *@This(), allocator: std.mem.Allocator) !void {
-    std.debug.print("gc\n", .{});
+    // std.debug.print("gc\n", .{});
 
     // Add all protected objects to the queue and mark them as reachable.
     var queue = blk: {
@@ -80,6 +113,7 @@ fn gc(self: *@This(), allocator: std.mem.Allocator) !void {
             };
         break :blk queue;
     };
+    defer queue.deinit(allocator);
 
     // Mark all transitively reachable objects.
     while (queue.pop()) |handle| {
@@ -87,8 +121,11 @@ fn gc(self: *@This(), allocator: std.mem.Allocator) !void {
         const traces = try trace(allocator, value.value);
         defer allocator.free(traces);
         for (traces) |t| {
-            self.map.getPtr(t).?.reachable = true;
-            try queue.append(allocator, t);
+            const entry = self.map.getPtr(t).?;
+            if (!entry.reachable) {
+                entry.reachable = true;
+                try queue.append(allocator, t);
+            }
         }
     }
 
@@ -107,12 +144,14 @@ fn gc(self: *@This(), allocator: std.mem.Allocator) !void {
             // How to deinit keys in other hashmaps...
             // I don't know.
             // Self? This can go wrong?
-            entry.value_ptr.*.value.deinit(allocator, self);
+            // (There's no self now.)
+
+            entry.value_ptr.value.deinit(allocator);
         };
         self.map.deinit(allocator);
         break :blk map;
     };
-    self.capacity = self.map.count() * 2 + 1;
+    self.limit = self.map.count() * 2;
 }
 
 pub fn alloc(
@@ -121,10 +160,12 @@ pub fn alloc(
     value: Value,
     protection: enum { protected, unprotected },
 ) !Handle {
+    // std.debug.print("gc.alloc: .map.count: {}, limit: {}\n", .{ self.map.count(), self.limit });
     switch (self.mode) {
         .disabled => {},
-        .default => if (self.map.count() > self.capacity)
-            try self.gc(allocator),
+        .default => if (self.map.count() > self.limit) {
+            try self.gc(allocator);
+        },
         .aggressive => try self.gc(allocator),
     }
     self.counter += 1;
@@ -155,7 +196,7 @@ pub fn unprotect(self: *@This(), value: Handle) void {
 }
 
 // Shouldn't this return by value?
-pub fn get(self: *@This(), value: Handle) *Value {
+pub fn get(self: *const @This(), value: Handle) *Value {
     const ptr = self.map.getPtr(value).?;
     std.debug.assert(ptr.protections != 0);
     return &ptr.value;
