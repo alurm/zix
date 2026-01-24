@@ -71,9 +71,10 @@ pub fn help(writer: *std.Io.Writer) !void {
     return writer.print(
         \\Zix 0.0.1
         \\
-        \\To exit, type `)` (without backticks) followed by a newline.
+        \\To exit, type `)`.
         \\
-        \\For help, type `help` (without backticks) followed by a newline.
+        \\For help, type `help`.
+        \\For a list of builtin commands, type `builtins`.
         \\
     , .{});
 }
@@ -109,18 +110,21 @@ pub const std_options: std.Options = .{
     .fmt_max_depth = 10,
 };
 
+// C is evil?
+fn is_interactive() bool {
+    return std.c.isatty(std.c.STDIN_FILENO) == 1;
+}
+
 fn shell(
-    write: *std.Io.Writer,
-    read: *std.Io.Reader,
+    writer: *std.Io.Writer,
+    reader: *std.Io.Reader,
     tokenizer: *Tokenizer,
     allocator: std.mem.Allocator,
 ) !void {
-    var token_stream: Tokenizer.Stream = .init(read, tokenizer);
+    var token_stream: Tokenizer.Stream = .init(reader, tokenizer);
     defer token_stream.deinit(allocator);
 
-    try help(write);
-
-    var env: Environment = try .init(allocator);
+    var env: Environment = try .init(allocator, writer);
 
     // This is bad.
     defer env.deinit(allocator) catch unreachable;
@@ -139,11 +143,17 @@ fn shell(
             value: builtins.Builtin,
         } = undefined;
 
-        inline for (decls, 0..) |decl, i| {
+        // Hacky?
+        comptime var len = 0;
+
+        inline for (decls) |decl| {
             const name = decl.name;
             const field = @field(builtins, name);
             switch (@typeInfo(@TypeOf(field))) {
-                .@"fn" => array[i] = .{ .name = name, .value = field },
+                .@"fn" => {
+                    array[len] = .{ .name = name, .value = field };
+                    len += 1;
+                },
                 else => {},
             }
         }
@@ -155,6 +165,8 @@ fn shell(
         // OOM is not handled here.
 
         for (array, 0..) |builtin, i| {
+            if (i == len) break;
+
             // > unprotected
             // Shouldn't be an issue if we immediately put it into context.
             // Which we do.
@@ -178,9 +190,59 @@ fn shell(
         // break :blk handles;
     }
 
+    // let x $(flsjlaf)
+
+    try if (is_interactive()) interactive(
+        writer,
+        allocator,
+        &token_stream,
+        &env,
+    ) else non_interactive(
+        writer,
+        allocator,
+        &token_stream,
+        &env,
+    );
+}
+
+// TODO: get rid of this?
+// Dedup.
+fn non_interactive(
+    writer: *std.Io.Writer,
+    allocator: std.mem.Allocator,
+    token_stream: *Tokenizer.Stream,
+    env: *Environment,
+) !void {
+    var block = try parser.Block.parse(
+        token_stream,
+        allocator,
+    );
+    defer block.deinit(allocator);
+
+    const handle = try env.evaluate_block(
+        allocator,
+        block,
+    );
+    defer env.gc.unprotect(handle);
+    // Hacky?
+    const value = env.gc.get(handle);
+    if (value.* != .nothing) {
+        try writer.print("{f}\n", .{env.gc.get(handle)});
+        try writer.flush();
+    }
+}
+
+fn interactive(
+    writer: *std.Io.Writer,
+    allocator: std.mem.Allocator,
+    token_stream: *Tokenizer.Stream,
+    env: *Environment,
+) !void {
+    try help(writer);
+
     while (true) {
-        try write.print("\n", .{});
-        try write.flush();
+        try writer.print("\n", .{});
+        try writer.flush();
 
         // Not sure if this should be before or after parsing.
         {
@@ -192,7 +254,7 @@ fn shell(
         }
 
         var statement = try parser.Statement.parse(
-            &token_stream,
+            token_stream,
             allocator,
         );
         defer allocator.destroy(statement);
@@ -218,7 +280,7 @@ fn shell(
             error.ExpressionTypeNotImplemented,
             error.CommandNotFound,
             => {
-                try write.print("{}\n", .{err});
+                try writer.print("{}\n", .{err});
                 continue;
             },
 
@@ -226,9 +288,12 @@ fn shell(
         };
         defer env.gc.unprotect(handle);
 
-        try write.print("{f}\n", .{env.gc.get(handle)});
+        const value = env.gc.get(handle);
 
-        try write.flush();
+        if (value.* != .nothing) {
+            try writer.print("{f}\n", .{env.gc.get(handle)});
+            try writer.flush();
+        }
 
         // const Gc = @import("gc.zig");
         // var gc: Gc = .init(.default);

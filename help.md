@@ -12,7 +12,7 @@ Example:
     # Comments are ignored by the interpreter.
     # Comments start with `#` and span until the end of the line.
     # The value of this statement is the string `Hello, world!`.
-    => 'Hello, world!'
+    <= 'Hello, world!'
 
 # Expressions
 
@@ -51,7 +51,7 @@ Example:
     # This statement creates a variable named `x` and sets its value to the string `3`.
     let x 3
     # We can refer to this variable now by typing `$x`.
-    => $x
+    <= $x
 
 (Under the hood, syntax `$x` gets transformed into `$(get x)`. Therefore, by redefining `get` a custom variable resolver can be installed.)
 
@@ -79,11 +79,11 @@ Example:
         # This variable is owned by the current block.
         let count 0
         # The value of the block is this closure.
-        => (
+        <= (
             # Increment the count.
             set count $(+ $count 1)
             # Return the updated count.
-            => $count
+            <= $count
         )
     )
     # Will return the string 1.

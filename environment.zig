@@ -1,13 +1,19 @@
 // TODO: fix error reporting.
 
 const std = @import("std");
+const p = std.debug.print;
 
 const builtins = @import("builtins.zig");
 const Gc = @import("gc.zig");
 const Parser = @import("parser.zig");
 
 const Self = @This();
+
 gc: Gc,
+
+// For builtins...
+// Maybe remove.
+writer: *std.Io.Writer,
 
 // Get rid of usizes?
 
@@ -17,8 +23,6 @@ gc: Gc,
 // Ugly dynamic typing here.
 // Should be Gc.Handle(Context) perhaps, IDK.
 context: Gc.Handle,
-
-const p = std.debug.print;
 
 pub const Context = struct {
     parent: ?Gc.Handle,
@@ -90,7 +94,8 @@ const Error = error{
     EvaluationOfClosuresIsNotImplemented,
 } || builtins.Error;
 
-fn evaluate_block(self: *Self, allocator: std.mem.Allocator, block: *Parser.Block) Error!Gc.Handle {
+// Is this safe public?
+pub fn evaluate_block(self: *Self, allocator: std.mem.Allocator, block: *Parser.Block) Error!Gc.Handle {
     const old_context = self.context;
 
     const new_context = try self.gc.alloc(
@@ -164,9 +169,8 @@ pub fn evaluate_expression(self: *Self, allocator: std.mem.Allocator, expression
     };
 }
 
-pub fn init(allocator: std.mem.Allocator) !@This() {
+pub fn init(allocator: std.mem.Allocator, writer: *std.Io.Writer) !@This() {
     var gc: Gc = .init(.aggressive);
-    // var gc: Gc = .init(.disabled);
     const context = try gc.alloc(allocator, .{
         .context = .{
             .parent = null,
@@ -175,6 +179,7 @@ pub fn init(allocator: std.mem.Allocator) !@This() {
     return .{
         .gc = gc,
         .context = context,
+        .writer = writer,
     };
 }
 

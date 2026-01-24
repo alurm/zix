@@ -3,6 +3,14 @@
 // - set
 // - cat, ..
 // - del?
+// - help, help system
+// - read file?
+// - unix
+// - same?
+// - 'same strings?'
+// - string is?
+// - while
+// - list?
 
 const std = @import("std");
 
@@ -17,6 +25,7 @@ pub const Error = error{
     OutOfMemory,
     InvalidBase,
     InvalidCharacter,
+    WriteFailed,
 };
 
 pub const Builtin = *const fn (
@@ -24,6 +33,102 @@ pub const Builtin = *const fn (
     env: *Environment,
     arguments: []Gc.Handle,
 ) Error!Gc.Handle;
+
+// Should return a list?
+// Namespacing...
+pub fn builtins(
+    allocator: std.mem.Allocator,
+    env: *Environment,
+    _: []Gc.Handle,
+) Error!Gc.Handle {
+    const decls = @typeInfo(@This()).@"struct".decls;
+
+    inline for (decls) |decl| {
+        if (@typeInfo(@TypeOf(@field(@This(), decl.name))) == .@"fn")
+            try env.writer.print("{s}\n", .{decl.name});
+    }
+
+    return env.gc.alloc(allocator, .nothing, .protected);
+}
+
+// TODO: improve this.
+pub fn help(
+    allocator: std.mem.Allocator,
+    env: *Environment,
+    arguments: []Gc.Handle,
+) Error!Gc.Handle {
+    if (arguments.len == 0) {
+        try env.writer.print(
+            \\Type `help syntax` for an explanation of the language syntax.
+            \\Type `help words` for a list of currently defined words.
+            \\
+        , .{});
+        return env.gc.alloc(allocator, .nothing, .protected);
+    }
+
+    const value = env.gc.get(arguments[0]).*;
+    if (value != .string) return error.BadArgumentType;
+
+    const topic = value.string;
+
+    // There should be a smarter comptime hashmap way, I think.
+    // Dunno :3
+    if (std.mem.eql(u8, topic, "syntax")) {
+        try env.writer.print("{s}", .{@embedFile("help.md")});
+    } else if (std.mem.eql(u8, topic, "words")) {
+        var maybe_context: ?Gc.Handle = env.context;
+        while (maybe_context) |context_handle| {
+            const context = env.gc.get(context_handle).context;
+
+            var iterator = context.words.keyIterator();
+
+            while (iterator.next()) |word| {
+                try env.writer.print("word: {s}\n", .{word.*});
+            }
+
+            maybe_context = context.parent;
+        }
+    }
+
+    return env.gc.alloc(allocator, .nothing, .protected);
+}
+
+pub fn @"same strings?"(
+    allocator: std.mem.Allocator,
+    env: *Environment,
+    arguments: []Gc.Handle,
+) Error!Gc.Handle {
+    var maybe_scrutinee: ?[]const u8 = null;
+    for (arguments) |argument|
+        switch (env.gc.get(argument).*) {
+            .string => |string| {
+                if (maybe_scrutinee) |scrutinee| {
+                    // Using nothing for falsity is cringe?
+                    // Using string false is also cringe.
+                    if (!std.mem.eql(
+                        u8,
+                        scrutinee,
+                        string,
+                    )) {
+                        return env.gc.alloc(
+                            allocator,
+                            .{
+                                .string = try allocator.dupe(u8, "false"),
+                            },
+                            .protected,
+                        );
+                    }
+                } else maybe_scrutinee = string;
+            },
+            else => return error.BadArgumentType,
+        };
+
+    return env.gc.alloc(
+        allocator,
+        .{ .string = try allocator.dupe(u8, "true") },
+        .protected,
+    );
+}
 
 pub fn get(
     _: std.mem.Allocator,
@@ -59,7 +164,7 @@ pub fn set(
     return env.gc.alloc(allocator, .nothing, .protected);
 }
 
-pub fn @"=>"(
+pub fn @"<="(
     _: std.mem.Allocator,
     env: *Environment,
     arguments: []Gc.Handle,
@@ -89,11 +194,64 @@ pub fn let(
     return env.gc.alloc(allocator, .nothing, .protected);
 }
 
-// pub fn set(
-//     allocator: std.mem.Allocator,
-//     env: *Environment,
-//     arguments: []Gc.Handle,
-// ) Error!Gc.Handle {}
+// Concat? UwU.
+// Pass gc individually from env?
+// Env is not needed everywhere.
+// Gc is needed more often, kinda?
+// UwU.
+// errdefer is not used in other places btw.
+pub fn cat(
+    allocator: std.mem.Allocator,
+    env: *Environment,
+    arguments: []Gc.Handle,
+) Error!Gc.Handle {
+    var result: std.ArrayList(u8) = .empty;
+    errdefer result.deinit(allocator);
+
+    for (arguments) |argument| {
+        const value = env.gc.get(argument);
+        switch (value.*) {
+            .string => |string| {
+                for (string) |char| {
+                    // Optimize?
+                    try result.append(allocator, char);
+                }
+            },
+            else => return error.BadArgumentType,
+        }
+    }
+
+    const string = try result.toOwnedSlice(allocator);
+    errdefer allocator.free(string);
+    return env.gc.alloc(allocator, .{ .string = string }, .protected);
+}
+
+pub fn echo(
+    allocator: std.mem.Allocator,
+    env: *Environment,
+    arguments: []Gc.Handle,
+) Error!Gc.Handle {
+    for (arguments, 0..) |argument, i| {
+        const value = env.gc.get(argument);
+        switch (value.*) {
+            .string => |string| {
+                try env.writer.print(
+                    "{s}{s}",
+                    .{
+                        if (i == 0) "" else " ",
+                        string,
+                    },
+                );
+            },
+            else => return error.BadArgumentType,
+        }
+    }
+
+    try env.writer.print("\n", .{});
+    try env.writer.flush();
+
+    return env.gc.alloc(allocator, .nothing, .protected);
+}
 
 pub fn add(
     allocator: std.mem.Allocator,

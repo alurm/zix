@@ -198,6 +198,9 @@ pub fn unprotect(self: *@This(), value: Handle) void {
 // Shouldn't this return by value?
 pub fn get(self: *const @This(), value: Handle) *Value {
     const ptr = self.map.getPtr(value).?;
-    std.debug.assert(ptr.protections != 0);
+
+    // I'm not sure if this can be made useful.
+    // std.debug.assert(!ptr.dead);
+
     return &ptr.value;
 }

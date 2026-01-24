@@ -1,0 +1,15 @@
+let make-counter (
+	let count 0
+	<= (
+		set count $(add $count 1)
+		get count
+	)
+)
+
+let counter $(make-counter)
+
+echo $(counter)
+echo $(counter)
+echo $(counter)
+
+()

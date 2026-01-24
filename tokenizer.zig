@@ -167,7 +167,13 @@ pub const Stream = struct {
                 self.buffer.len = 0;
                 self.position = 0;
                 var byte: [1]u8 = undefined;
-                try self.reader.readSliceAll(&byte);
+                self.reader.readSliceAll(&byte) catch |err| switch (err) {
+                    // Hacky?
+                    // Based?
+                    // Not sure.
+                    error.EndOfStream => return .closing_paren,
+                    else => return err,
+                };
                 self.buffer = try self.tokenizer.tokenize(allocator, byte[0]);
                 continue :swtch self.position < self.buffer.len;
             },
@@ -180,6 +186,9 @@ pub const Stream = struct {
 // But I'm not sure that this is a reasonable requirement.
 //
 // TODO: consider rejecting some funny characters right off the bat.
+//
+// TODO: do paired string literals? () [] {} ?
+// IDK.
 fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.ArrayList(Token) {
     var result: std.ArrayList(Token) = .empty;
     errdefer result.deinit(allocator);
