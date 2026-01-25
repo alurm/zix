@@ -81,6 +81,7 @@ pub fn build(b: *std.Build) void {
             // // importing modules from different packages).
             // .{ .name = "zix", .module = mod },
         },
+        .link_libc = true,
     });
     const exe = b.addExecutable(.{ .name = "zix", .root_module = exe_root_module });
 
