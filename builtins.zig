@@ -12,6 +12,28 @@
 // - while
 // - list?
 // - call (requires some form of a list)
+// - macros?
+// - !
+// - json?
+// - wasm
+// - js
+// - c
+// - pipes
+// - \
+// - ;
+// - hashmaps, objects, namespaces, returns, imports, aliases
+//
+// $(unix pipe) process ls
+// $(unix process complete) \
+//   args $(list a b c)
+//   stdin $(some file)
+//   stdout $(none)
+// ;
+// use unix $(math map process p pipe ())
+// unix pipe \
+//  $(unix process ls)
+//  $(unix progress grep)
+// ;
 
 const std = @import("std");
 
