@@ -116,7 +116,7 @@ pub const std_options: std.Options = .{
 };
 
 // C is evil?
-fn is_interactive() bool {
+fn isInteractive() bool {
     return std.c.isatty(std.c.STDIN_FILENO) == 1;
 }
 
@@ -197,12 +197,12 @@ fn shell(
 
     // let x $(flsjlaf)
 
-    try if (is_interactive()) interactive(
+    try if (isInteractive()) interactive(
         writer,
         allocator,
         &token_stream,
         &env,
-    ) else non_interactive(
+    ) else nonInteractive(
         writer,
         allocator,
         &token_stream,
@@ -213,7 +213,7 @@ fn shell(
 
 // TODO: get rid of this?
 // Dedup.
-fn non_interactive(
+fn nonInteractive(
     writer: *std.Io.Writer,
     allocator: std.mem.Allocator,
     token_stream: *Tokenizer.Stream,
