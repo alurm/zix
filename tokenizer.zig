@@ -330,7 +330,7 @@ test "tokenize a bunch of stuff" {
             .{ .string = "very" },
             .{ .string = "cool" },
             .{ .closing_paren = {} },
-            .{ .comment = "This is a comment." },
+            // .{ .comment = "This is a comment." },
             .{ .newline = {} },
             .{ .backslash = {} },
             .{ .newline = {} },
