@@ -102,7 +102,9 @@ pub fn build(b: *std.Build) void {
     const wasm_root_module = b.createModule(.{
         .root_source_file = b.path("browser.zig"),
         .target = wasm_target,
-        .optimize = optimize,
+        // .optimize = optimize,
+        // ????
+        .optimize = .ReleaseSmall,
         .imports = &.{},
     });
 
