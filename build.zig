@@ -81,22 +81,54 @@ pub fn build(b: *std.Build) void {
             // // importing modules from different packages).
             // .{ .name = "zix", .module = mod },
         },
+        // TODO: don't really wanna to that.
         .link_libc = true,
     });
     const exe = b.addExecutable(.{ .name = "zix", .root_module = exe_root_module });
-
-    // https://zigtools.org/zls/guides/build-on-save/
-    {
-        const check = b.step("check", "Check if the project compiles");
-        check.dependOn(&b.addExecutable(.{ .name = "zix", .root_module = exe_root_module }).step);
-        // check.dependOn(&b.addTest(.{ .root_module = mod }).step);
-    }
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
     // step). By default the install prefix is `zig-out/` but can be overridden
     // by passing `--prefix` or `-p`.
     b.installArtifact(exe);
+
+    // Wasm.
+
+    const wasm_target = b.resolveTargetQuery(.{
+        .cpu_arch = .wasm32,
+        .os_tag = .freestanding,
+    });
+
+    const wasm_root_module = b.createModule(.{
+        .root_source_file = b.path("wasm_shell.zig"),
+        .target = wasm_target,
+        .optimize = optimize,
+        .imports = &.{},
+    });
+
+    const wasm_exe = b.addExecutable(.{
+        .name = "zix",
+        .root_module = wasm_root_module,
+    });
+
+    // I don't understand what the fuck is this.
+    // Why is this shit necessary?
+    // I'm not sure if export_memory or export_table does anything.
+    wasm_exe.entry = .disabled;
+    // wasm_exe.export_table = true;
+    // wasm_exe.export_memory = true;
+    wasm_exe.rdynamic = true;
+
+    b.installArtifact(wasm_exe);
+
+    // https://zigtools.org/zls/guides/build-on-save/
+    {
+        const check = b.step("check", "Check if the project compiles");
+        check.dependOn(&b.addExecutable(.{ .name = "zix", .root_module = exe_root_module }).step);
+        check.dependOn(&b.addExecutable(.{ .name = "zix", .root_module = wasm_root_module }).step);
+
+        // check.dependOn(&b.addTest(.{ .root_module = mod }).step);
+    }
 
     // This creates a top level step. Top level steps have a name and can be
     // invoked by name when running `zig build` (e.g. `zig build run`).

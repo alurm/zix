@@ -1,3 +1,5 @@
+TODO: maybe should support ; for separating statements probably. Might be useful for fake shebangs.
+
 ```text
 block :=
   | ')'

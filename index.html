@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+
+<head>
+  <title>Zix</title>
+  <meta charset="utf-8">
+  <script type="module" src="zix.js" async></script>
+  <style>
+    textarea {
+      width: 100%;
+      field-sizing: content;
+      min-height: 3rem;
+      resize: none;
+    }
+  </style>
+</head>
+
+<body>
+  <h1><a href=https://github.com/alurm/zix>Zix</a> interpreter</h1>
+
+  <ul>
+    <li>
+      Toggle visibility of
+      <button onclick="input.hidden ^= 1">input</button> or
+      <button onclick="output.hidden ^= 1">output</button>
+    </li>
+    <li><button id=evaluatingButton>Evaluate</button></li>
+  </ul>
+
+  <h2>Input</h2>
+
+  <textarea id=inputTextArea></textarea>
+
+  <h2>Output</h2>
+
+  <textarea id=outputTextArea></textarea>
+</body>
+
+</html>
