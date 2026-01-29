@@ -70,6 +70,32 @@ pub const Context = struct {
     // }
 };
 
+pub const builtin_fns = block: {
+    const decls = @typeInfo(builtins).@"struct".decls;
+
+    var array: [decls.len]struct {
+        name: []const u8,
+        value: builtins.Builtin,
+    } = undefined;
+
+    // Hacky?
+    var len = 0;
+
+    for (decls) |decl| {
+        const name = decl.name;
+        const field = @field(builtins, name);
+        switch (@typeInfo(@TypeOf(field))) {
+            .@"fn" => {
+                array[len] = .{ .name = name, .value = field };
+                len += 1;
+            },
+            else => {},
+        }
+    }
+
+    break :block array[0..len].*;
+};
+
 // Check that this is safe.
 pub fn lookup(self: @This(), string: []const u8) ?*Gc.Handle {
     var maybe_handle: ?Gc.Handle = self.context;
@@ -169,8 +195,8 @@ pub fn evaluate_expression(self: *Self, allocator: std.mem.Allocator, expression
     };
 }
 
-pub fn init(allocator: std.mem.Allocator, writer: *std.Io.Writer) !@This() {
-    var gc: Gc = .init(.aggressive);
+pub fn init(allocator: std.mem.Allocator, writer: *std.Io.Writer, gc_mode: Gc.Mode) !@This() {
+    var gc: Gc = .init(gc_mode);
     const context = try gc.alloc(allocator, .{
         .context = .{
             .parent = null,
@@ -181,6 +207,43 @@ pub fn init(allocator: std.mem.Allocator, writer: *std.Io.Writer) !@This() {
         .context = context,
         .writer = writer,
     };
+}
+
+// (Old comment when this was in main.)
+// how to do stuff not available on wasm.
+// how to check that wasm build fails... is it complicated or not i don't know...
+// let x $(flsjlaf)
+// This (including defers is a mess).
+// Shouldn't be here.
+// Also, env.deinit should do more? Or less? I don't know.
+// Bad mess.
+pub fn default(allocator: std.mem.Allocator, writer: *std.Io.Writer) !@This() {
+    // todo aggressive shouldn't be default mode......
+    var result: @This() = try .init(allocator, writer, .aggressive);
+
+    // oom?
+    // cause oom in wasm btw would be cool
+
+    for (builtin_fns) |builtin| {
+        // > unprotected
+        // Shouldn't be an issue if we immediately put it into context.
+        // Which we do.
+        const handle = try result.gc.alloc(
+            allocator,
+            .{ .builtin = builtin.value },
+            .unprotected,
+        );
+
+        const context = &result.gc.get(result.context).context;
+
+        try context.words.put(
+            allocator,
+            try allocator.dupe(u8, builtin.name),
+            handle,
+        );
+    }
+
+    return result;
 }
 
 // This is a mess.

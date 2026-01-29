@@ -4,7 +4,7 @@
 <head>
   <title>Zix</title>
   <meta charset="utf-8">
-  <script type="module" src="zix.js" async></script>
+  <script type="module" src="browser.js" async></script>
   <style>
     textarea {
       width: 100%;
@@ -16,24 +16,25 @@
 </head>
 
 <body>
-  <h1><a href=https://github.com/alurm/zix>Zix</a> interpreter</h1>
+  <h1><a href="https://github.com/alurm/zix">Zix</a> interpreter</h1>
 
   <ul>
     <li>
       Toggle visibility of
-      <button onclick="input.hidden ^= 1">input</button> or
-      <button onclick="output.hidden ^= 1">output</button>
+      <button onclick="window.inputTextArea.hidden ^= 1">input</button> or
+      <button onclick="window.outputTextArea.hidden ^= 1">output</button>.
     </li>
-    <li><button id=evaluatingButton>Evaluate</button></li>
+    <li><button onclick="window.zix.interpret()">Interpret</button> input.</li>
+    <!-- <li><button onclick="window.zix.reset()">Reset</button> interpreter state.</li> -->
   </ul>
 
   <h2>Input</h2>
 
-  <textarea id=inputTextArea></textarea>
+  <textarea id="inputTextArea"></textarea>
 
   <h2>Output</h2>
 
-  <textarea id=outputTextArea></textarea>
+  <textarea id="outputTextArea"></textarea>
 </body>
 
 </html>

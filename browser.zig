@@ -3,6 +3,7 @@
 // Does ReleaseSafe make sense for Wasm?
 
 const std = @import("std");
+const shell = @import("lib/shell.zig");
 
 const allocator = std.heap.wasm_allocator;
 
@@ -33,11 +34,15 @@ const Js = struct {
 
     export fn interpret(input: *[]u8) *[]u8 {
         defer free(input);
-        {
-            const v1 = allocator.dupe(u8, "Hey!") catch unreachable;
-            const v2 = allocator.create([]u8) catch unreachable;
-            v2.* = v1;
-            return v2;
-        }
+        // {
+        //     const v1 = allocator.dupe(u8, "Hey!") catch unreachable;
+        //     const v2 = allocator.create([]u8) catch unreachable;
+        //     v2.* = v1;
+        //     return v2;
+        // }
+        const output = shell.doString(input.*);
+        const pointer = allocator.create([]u8) catch unreachable;
+        pointer.* = output;
+        return pointer;
     }
 };

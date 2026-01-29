@@ -124,7 +124,8 @@ pub fn build(b: *std.Build) void {
     // https://zigtools.org/zls/guides/build-on-save/
     {
         const check = b.step("check", "Check if the project compiles");
-        check.dependOn(&b.addExecutable(.{ .name = "zix", .root_module = exe_root_module }).step);
+        // check.dependOn(&b.addExecutable(.{ .name = "zix", .root_module = exe_root_module }).step);
+        // Doesn't fakink work?
         check.dependOn(&b.addExecutable(.{ .name = "zix", .root_module = wasm_root_module }).step);
 
         // check.dependOn(&b.addTest(.{ .root_module = mod }).step);

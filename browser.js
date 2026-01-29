@@ -26,13 +26,17 @@ const toJs = (input) => {
   }
 };
 
-evaluatingButton.onclick = () => {
-  outputTextArea.value = toJs(zig.interpret(toZig(inputTextArea.value)));
-};
-
 window.zix = {
   wasmModule,
   toJs,
   toZig,
   zig,
+};
+
+window.zix.interpret = () => {
+  outputTextArea.value = toJs(zig.interpret(toZig(inputTextArea.value)));
+};
+
+window.zix.reset = () => {
+  zig.reset();
 };

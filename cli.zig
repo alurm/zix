@@ -89,8 +89,6 @@ pub fn help(writer: *std.Io.Writer) !void {
     , .{});
 }
 
-// Write should be renamed as writer.
-// Read should be renamed as reader.
 // Or something like that.
 pub fn main() !void {
     // TODO: pick an allocator based on the current build configuration.
@@ -134,69 +132,10 @@ fn shell(
     var token_stream: Tokenizer.Stream = .init(reader, tokenizer);
     defer token_stream.deinit(allocator);
 
-    var env: Environment = try .init(allocator, writer);
+    var env: Environment = try .default(allocator, writer);
 
-    // This is bad.
+    // This is bad. Is it. Idk.
     defer env.deinit(allocator) catch unreachable;
-
-    // This (including defers is a mess).
-    // Shouldn't be here.
-    // Also, env.deinit should do more? Or less? I don't know.
-    // Bad mess.
-    {
-        const decls = @typeInfo(builtins).@"struct".decls;
-
-        comptime var array: [decls.len]struct {
-            name: []const u8,
-            value: builtins.Builtin,
-        } = undefined;
-
-        // Hacky?
-        comptime var len = 0;
-
-        inline for (decls) |decl| {
-            const name = decl.name;
-            const field = @field(builtins, name);
-            switch (@typeInfo(@TypeOf(field))) {
-                .@"fn" => {
-                    array[len] = .{ .name = name, .value = field };
-                    len += 1;
-                },
-                else => {},
-            }
-        }
-
-        var handles: [decls.len]Gc.Handle = undefined;
-
-        // OOM is not handled here.
-
-        for (array, 0..) |builtin, i| {
-            if (i == len) break;
-
-            // > unprotected
-            // Shouldn't be an issue if we immediately put it into context.
-            // Which we do.
-            const handle = try env.gc.alloc(
-                allocator,
-                .{ .builtin = builtin.value },
-                .unprotected,
-            );
-
-            handles[i] = handle;
-
-            const context = &env.gc.get(env.context).context;
-
-            try context.words.put(
-                allocator,
-                try allocator.dupe(u8, builtin.name),
-                handle,
-            );
-        }
-
-        // break :blk handles;
-    }
-
-    // let x $(flsjlaf)
 
     try if (isInteractive()) interactive(
         writer,
