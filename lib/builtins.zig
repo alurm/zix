@@ -1,5 +1,6 @@
-// # Wanted builtins
+// # Wanted builtins/idioms
 //
+// - __name__ == '__main__'?
 // - set
 // - cat, ..
 // - del?

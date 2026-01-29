@@ -4,12 +4,16 @@
 // Perhaps referencing stuff manually would be enough?
 // I don't know.
 // https://ziggit.dev/t/how-do-i-get-zig-build-to-run-all-the-tests/4434
+// Move top faken hidden imports.
+// Fixing naming of faking files.
 
 const std = @import("std");
 
-const Environment = @import("environment.zig");
-const parser = @import("parser.zig");
-const Tokenizer = @import("tokenizer.zig");
+const Gc = @import("lib/gc.zig");
+const builtins = @import("lib/builtins.zig");
+const Environment = @import("lib/environment.zig");
+const parser = @import("lib/parser.zig");
+const Tokenizer = @import("lib/tokenizer.zig");
 
 test {
     std.testing.refAllDecls(@This());
@@ -25,6 +29,7 @@ test {
 // TODO: should arrays of such size be allocated on the stack?
 const buffer_size = 1024;
 
+// TODO: remove this.
 fn loop(allocator: std.mem.Allocator, tokenizer: *Tokenizer) !void {
     var reader_buffer: [buffer_size]u8 = undefined;
     var reader = std.fs.File.stdin().reader(&reader_buffer);
@@ -139,8 +144,6 @@ fn shell(
     // Also, env.deinit should do more? Or less? I don't know.
     // Bad mess.
     {
-        const builtins = @import("builtins.zig");
-
         const decls = @typeInfo(builtins).@"struct".decls;
 
         comptime var array: [decls.len]struct {
@@ -162,8 +165,6 @@ fn shell(
                 else => {},
             }
         }
-
-        const Gc = @import("gc.zig");
 
         var handles: [decls.len]Gc.Handle = undefined;
 

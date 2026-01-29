@@ -64,7 +64,7 @@ pub fn build(b: *std.Build) void {
         // b.createModule defines a new module just like b.addModule but,
         // unlike b.addModule, it does not expose the module to consumers of
         // this package, which is why in this case we don't have to give it a name.
-        .root_source_file = b.path("main.zig"),
+        .root_source_file = b.path("cli.zig"),
         // Target and optimization levels must be explicitly wired in when
         // defining an executable or library (in the root module), and you
         // can also hardcode a specific target for an executable or library
@@ -92,7 +92,7 @@ pub fn build(b: *std.Build) void {
     // by passing `--prefix` or `-p`.
     b.installArtifact(exe);
 
-    // Wasm.
+    // Wasm. TODO: rename to browser
 
     const wasm_target = b.resolveTargetQuery(.{
         .cpu_arch = .wasm32,
@@ -100,14 +100,14 @@ pub fn build(b: *std.Build) void {
     });
 
     const wasm_root_module = b.createModule(.{
-        .root_source_file = b.path("wasm_shell.zig"),
+        .root_source_file = b.path("browser.zig"),
         .target = wasm_target,
         .optimize = optimize,
         .imports = &.{},
     });
 
     const wasm_exe = b.addExecutable(.{
-        .name = "zix",
+        .name = "browser",
         .root_module = wasm_root_module,
     });
 

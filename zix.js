@@ -1,5 +1,5 @@
 const wasmModule = await WebAssembly.instantiateStreaming(
-  fetch("zig-out/bin/zix.wasm"),
+  fetch("zig-out/bin/browser.wasm"),
 );
 
 const zig = wasmModule.instance.exports;
