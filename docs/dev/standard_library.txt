@@ -1,0 +1,62 @@
+let m $(make_module)
+
+let if (
+	loop (
+		
+	)
+)
+
+(a b c)()
+
+let add (x y)(
+	+ $x $y
+)
+
+(make-adder)(
+	
+) (amount)(
+	(
+		(add $count 0)
+	)(count) 0
+)
+
+
+let tag (a b c)(
+
+	if $(3 > 4)
+
+	if $(3 < 4)
+
+	if $(math less)
+
+	type
+
+	let tag $1
+
+	let have_value $(less $# 2)
+
+	less $argument_count 2
+
+	less $#
+	let args $0
+
+	let tag $1
+	let have_value $(if (less $#))
+	let value $2
+	return (
+		if \
+			(eq $1 tag) (return $tag)
+			(eq $1 value) (return $value)
+		;
+	)
+	if \
+		(eq $1)
+	;
+)
+
+tag some 3
+tag none
+
+tag -tag some -value none
+
+tag some 3

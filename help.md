@@ -1,4 +1,6 @@
-# Statements
+# Syntax of Zix
+
+## Statements
 
 Statements look like this:
 
@@ -14,17 +16,17 @@ Example:
     # The value of this statement is the string `Hello, world!`.
     <= 'Hello, world!'
 
-# Expressions
+## Expressions
 
 There are multiple types of expressions: strings literals, blocks and closures.
 
-## String literals
+### String literals
 
 String literals are strings present in code literally. There are two types of string literals: bare strings and quoted strings.
 
 The value of a string literal is the string it represents.
 
-### Bare strings
+#### Bare strings
 
 Bare strings are called bare because they have no special characters in them and therefore can be typed as-is, without quoting.
 
@@ -32,7 +34,7 @@ Examples:
 
     Hello
 
-### Quoted strings
+#### Quoted strings
 
 Quoted strings start and end with a single quote.
 All repeated single quotes are interpreted as a single quote.
@@ -42,7 +44,7 @@ Example:
 
     'John''s pizza'
 
-## Variables
+### Variables
 
 Variables look like strings preceded by `$`.
 
@@ -55,11 +57,11 @@ Example:
 
 (Under the hood, syntax `$x` gets transformed into `$(get x)`. Therefore, by redefining `get` a custom variable resolver can be installed.)
 
-## Blocks and closures
+### Blocks and closures
 
 Blocks and closures are containers of statements.
 
-### Blocks
+#### Blocks
 
 Blocks execute immediately when seen.
 The value of a block is the value of the last statement in the block.
@@ -69,7 +71,7 @@ Example:
     # $(+ 2 3) is a block. It's value is the string 5.
     + 1 $(+ 2 3)
 
-### Closures
+#### Closures
 
 Closures are similar to blocks, but they do not execute immediately.
 

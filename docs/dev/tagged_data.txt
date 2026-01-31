@@ -1,0 +1,10 @@
+let tagged (
+  stack set $(stack make (if eq 1))
+  if \
+    (eq $1 tag) some
+    (eq $1 value) 3
+  ;
+)
+
+let tag ()
+

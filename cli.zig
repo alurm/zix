@@ -9,11 +9,11 @@
 
 const std = @import("std");
 
-const Gc = @import("lib/gc.zig");
-const builtins = @import("lib/builtins.zig");
-const Environment = @import("lib/environment.zig");
-const parser = @import("lib/parser.zig");
-const Tokenizer = @import("lib/tokenizer.zig");
+const Gc = @import("gc.zig");
+const builtins = @import("builtins.zig");
+const Environment = @import("environment.zig");
+const parser = @import("parser.zig");
+const Tokenizer = @import("tokenizer.zig");
 
 test {
     std.testing.refAllDecls(@This());

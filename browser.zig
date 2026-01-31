@@ -3,7 +3,7 @@
 // Does ReleaseSafe make sense for Wasm?
 
 const std = @import("std");
-const shell = @import("lib/shell.zig");
+const shell = @import("shell.zig");
 
 const allocator = std.heap.wasm_allocator;
 
