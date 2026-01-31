@@ -267,9 +267,16 @@ pub const Statement = struct {
                     (try token_stream.get(allocator, .next)).deinit(
                         allocator,
                     );
-                    if (!multiline)
-                        return error.SemicolonNotPrecededByBackslash;
-                    multiline = false;
+                    return if (command) |cmd| {
+                        const result = try allocator.create(Statement);
+                        result.* = .{
+                            .command = cmd,
+                            .arguments = try arguments.toOwnedSlice(allocator),
+                        };
+                        return result;
+                    } else {
+                        return error.StatementHasNoCommand;
+                    };
                 },
                 // Dunno if this is correct, actually.
                 // (
@@ -325,5 +332,5 @@ const ParsingError = error{
     DoubleDollarSignToken,
     UnexpectedTokenWhileParsingExpression,
     BackslashesCanNotNest,
-    SemicolonNotPrecededByBackslash,
+    StatementHasNoCommand,
 };
