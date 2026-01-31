@@ -251,21 +251,42 @@ pub const Statement = struct {
             arguments.deinit(allocator);
         }
 
+        var multiline = false;
+
         while (true) {
             switch (try token_stream.get(allocator, .peek)) {
+                .backslash => {
+                    (try token_stream.get(allocator, .next)).deinit(
+                        allocator,
+                    );
+                    // This can be removed, but I'm not sure that is should.
+                    if (multiline) return error.BackslashesCanNotNest;
+                    multiline = true;
+                },
+                .semicolon => {
+                    (try token_stream.get(allocator, .next)).deinit(
+                        allocator,
+                    );
+                    if (!multiline)
+                        return error.SemicolonNotPrecededByBackslash;
+                    multiline = false;
+                },
                 // Dunno if this is correct, actually.
                 // (
                 // )
                 // fofof
                 // )
                 //
+                // (Note: I don't know wtf is this comment.)
                 // On newline: continue.
                 // On a closing paren: we are done.
                 inline .newline, .closing_paren => |_, tag| {
                     // We shouldn't consume closing parens.
-                    if (tag == .newline)
+                    if (tag == .newline) {
                         (try token_stream.get(allocator, .next))
                             .deinit(allocator);
+                        if (multiline) continue;
+                    }
 
                     if (command) |cmd| {
                         const result = try allocator.create(Statement);
@@ -303,4 +324,6 @@ const ParsingError = error{
     TokenizerExpectedSpaceAfterPoundSignInComment,
     DoubleDollarSignToken,
     UnexpectedTokenWhileParsingExpression,
+    BackslashesCanNotNest,
+    SemicolonNotPrecededByBackslash,
 };
