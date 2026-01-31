@@ -1,4 +1,5 @@
 TODO: maybe should support ; for separating statements probably. Might be useful for fake shebangs.
+TODO: document current grammar (finish it).
 
 ```text
 block :=

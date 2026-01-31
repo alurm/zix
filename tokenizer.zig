@@ -32,10 +32,9 @@ state: union(enum) {
     quoted_string: struct {
         value: std.ArrayList(u8),
         state: union(enum) {
-            default,
-            /// After a single quote (not the first one).
-            after_quote,
-        } = .default,
+            expecting_opening_paren,
+            open_parens: usize,
+        },
     },
 } = .default,
 
@@ -232,33 +231,42 @@ fn tokenizeMain(tokenizer: *Self, allocator: std.mem.Allocator, char: u8) !std.A
             '#' => tokenizer.state = .{
                 .comment = .{ .value = .empty, .state = .expecting_space },
             },
-            '\'' => tokenizer.state = .{ .quoted_string = .{ .value = .empty } },
+            '\'' => tokenizer.state = .{
+                .quoted_string = .{
+                    .value = .empty,
+                    .state = .expecting_opening_paren,
+                },
+            },
             // NOTE: could be useful to reject some funny characters here, which we currently don't do.
             else => {
                 tokenizer.state = .{ .bare_string = .empty };
                 try tokenizer.state.bare_string.append(allocator, char);
             },
         },
-        // Inside of quotes, a double single quote is treated as a literal single quote.
-        // No other escape sequences are available.
         .quoted_string => |*quoted_string| switch (quoted_string.state) {
-            .default => switch (char) {
-                '\'' => quoted_string.state = .after_quote,
-                else => try quoted_string.value.append(allocator, char),
+            .expecting_opening_paren => switch (char) {
+                '(' => quoted_string.state = .{
+                    .open_parens = 1,
+                },
+                else => return error.TokenizerExpectedOpeningParenAfterSingleQuote,
             },
-            .after_quote => switch (char) {
-                '\'' => {
-                    quoted_string.state = .default;
-                    try quoted_string.value.append(allocator, '\'');
+            .open_parens => |*open_parens| switch (char) {
+                '(' => {
+                    open_parens.* += 1;
+                    try quoted_string.value.append(allocator, '(');
                 },
-                else => {
-                    try result.append(allocator, .{
-                        .string = try quoted_string.value.toOwnedSlice(allocator),
-                    });
-                    // Analyze the current char again in the default state.
-                    tokenizer.state = .default;
-                    continue :swtch tokenizer.state;
+                ')' => {
+                    open_parens.* -= 1;
+                    if (open_parens.* == 0) {
+                        try result.append(allocator, .{
+                            .string = try quoted_string.value.toOwnedSlice(allocator),
+                        });
+                        tokenizer.state = .default;
+                    } else {
+                        try quoted_string.value.append(allocator, ')');
+                    }
                 },
+                else => try quoted_string.value.append(allocator, char),
             },
         },
 

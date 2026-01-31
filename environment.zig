@@ -349,6 +349,6 @@ pub fn evaluate_statement(
         //     return .nothing;
         // } else return error.BuiltinNotDefined,
         .nothing => return error.ValueOfCommandIsNothing,
-        .context => unreachable,
+        .context => return error.ValueOfCommandIsContext,
     }
 }

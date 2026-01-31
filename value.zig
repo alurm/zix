@@ -67,7 +67,7 @@ pub const Value = union(enum) {
             .builtin => writer.print("<builtin>", .{}),
             // Bad.
             .closure => writer.print("<closure>", .{}),
-            .context => unreachable,
+            .context => writer.print("<context>", .{}),
         };
     }
 };

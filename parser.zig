@@ -299,7 +299,9 @@ pub const Statement = struct {
                         const result = try allocator.create(Statement);
                         result.* = .{
                             .command = cmd,
-                            .arguments = try arguments.toOwnedSlice(allocator),
+                            .arguments = try arguments.toOwnedSlice(
+                                allocator,
+                            ),
                         };
                         return result;
                     } else continue;
@@ -333,4 +335,5 @@ const ParsingError = error{
     UnexpectedTokenWhileParsingExpression,
     BackslashesCanNotNest,
     StatementHasNoCommand,
+    TokenizerExpectedOpeningParenAfterSingleQuote,
 };

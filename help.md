@@ -68,8 +68,8 @@ The value of a block is the value of the last statement in the block.
 
 Example:
 
-    # $(+ 2 3) is a block. It's value is the string 5.
-    + 1 $(+ 2 3)
+    # $(add 2 3) is a block. It's value is the string 5.
+    add 1 $(add 2 3)
 
 #### Closures
 

@@ -78,13 +78,8 @@ pub fn help(writer: *std.Io.Writer) !void {
         \\
         \\To exit, type `)`.
         \\To get help, type `help`.
-        \\
-        \\# Notes on starting Zix
-        \\
         \\To start Zix in batch mode: `zix < program.zix`.
         \\To start Zix in interactive mode: `zix [<files>...]`. Files are evaluated before a prompt is shown.
-        \\
-        \\---
         \\
     , .{});
 }
@@ -248,6 +243,8 @@ fn interactive(
             allocator,
             statement,
         ) catch |err| switch (err) {
+            // Bad code?
+            error.ValueOfCommandIsContext,
             error.BadArgumentCount,
             error.WordNotDefined,
             error.BadArgumentType,

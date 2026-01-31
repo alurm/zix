@@ -56,6 +56,7 @@ pub const Error = error{
     WriteFailed,
     ValueOfCommandIsString,
     ValueOfCommandIsNothing,
+    ValueOfCommandIsContext,
     CommandNotFound,
     ExpressionTypeNotImplemented,
     EvaluationOfClosuresIsNotImplemented,
@@ -66,6 +67,14 @@ pub const Builtin = *const fn (
     env: *Environment,
     arguments: []Gc.Handle,
 ) Error!Gc.Handle;
+
+pub fn context(
+    _: std.mem.Allocator,
+    env: *Environment,
+    _: []Gc.Handle,
+) Error!Gc.Handle {
+    return env.gc.protected(env.context);
+}
 
 // Dedup this with evaluate_statement.
 // Can arguments get mutated during execution of condition?
@@ -172,9 +181,9 @@ pub fn help(
     } else if (std.mem.eql(u8, topic, "words")) {
         var maybe_context: ?Gc.Handle = env.context;
         while (maybe_context) |context_handle| {
-            const context = env.gc.get(context_handle).context;
+            const ctx = env.gc.get(context_handle).context;
 
-            var iterator = context.words.keyIterator();
+            var iterator = ctx.words.keyIterator();
 
             while (iterator.next()) |word| {
                 // Use {f} please.
@@ -183,7 +192,7 @@ pub fn help(
                 try env.writer.flush();
             }
 
-            maybe_context = context.parent;
+            maybe_context = ctx.parent;
         }
     }
 
@@ -316,8 +325,8 @@ pub fn let(
     // We put it into the stack immediately.
     const value = arguments[1];
     // Does this compile without &?
-    const context = &env.gc.get(env.context).context;
-    try context.words.put(allocator, word, value);
+    const ctx = &env.gc.get(env.context).context;
+    try ctx.words.put(allocator, word, value);
     return env.gc.alloc(allocator, .nothing, .protected);
 }
 
@@ -339,13 +348,13 @@ pub fn global(
     const value = arguments[1];
 
     // &&&&????
-    var context = &env.gc.get(env.context).context;
+    var ctx = &env.gc.get(env.context).context;
 
-    while (context.parent) |parent| {
-        context = &env.gc.get(parent).context;
+    while (ctx.parent) |parent| {
+        ctx = &env.gc.get(parent).context;
     }
 
-    try context.words.put(allocator, word, value);
+    try ctx.words.put(allocator, word, value);
     return env.gc.alloc(allocator, .nothing, .protected);
 }
 
