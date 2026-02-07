@@ -165,6 +165,7 @@ fn nonInteractive(
     const handle = try env.evaluate_block(
         allocator,
         block,
+        &.{},
     );
     defer env.gc.unprotect(handle);
     // Hacky?
@@ -208,7 +209,7 @@ fn interactive(
         );
         defer block.deinit(allocator);
 
-        env.gc.unprotect(try env.evaluate_block(allocator, block));
+        env.gc.unprotect(try env.evaluate_block(allocator, block, &.{}));
     }
 
     while (true) {

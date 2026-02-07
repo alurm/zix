@@ -121,7 +121,12 @@ const Error = error{
 } || builtins.Error;
 
 // Is this safe public?
-pub fn evaluate_block(self: *Self, allocator: std.mem.Allocator, block: *Parser.Block) Error!Gc.Handle {
+pub fn evaluate_block(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    block: *Parser.Block,
+    arguments: []Gc.Handle,
+) Error!Gc.Handle {
     const old_context = self.context;
 
     const new_context = try self.gc.alloc(
@@ -136,6 +141,14 @@ pub fn evaluate_block(self: *Self, allocator: std.mem.Allocator, block: *Parser.
     }
 
     self.context = new_context;
+
+    for (1.., arguments) |i, argument| {
+        var w: std.Io.Writer.Allocating = .init(allocator);
+        defer w.deinit();
+        const writer = &w.writer;
+        try writer.print("{}", .{i});
+        try self.gc.get(self.context).context.words.put(allocator, try w.toOwnedSlice(), argument);
+    }
 
     var result = try self.gc.alloc(allocator, .nothing, .protected);
     for (block.statements) |statement| {
@@ -294,7 +307,7 @@ pub fn evaluate_statement(
             const old_context = self.context;
             defer self.context = old_context;
             self.context = closure.context;
-            return evaluate_block(self, allocator, closure.block);
+            return evaluate_block(self, allocator, closure.block, arguments);
         },
         // .closure => unreachable,
         // .builtin => |builtin| return if (std.mem.eql(u8, builtin, "get")) {

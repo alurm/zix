@@ -44,7 +44,7 @@ pub fn doString(input: []u8) []u8 {
     const block = parser.Block.parse(&token_stream, allocator) catch unreachable;
     defer block.deinit(allocator);
 
-    const handle = env.evaluate_block(allocator, block) catch unreachable;
+    const handle = env.evaluate_block(allocator, block, &.{}) catch unreachable;
     defer env.gc.unprotect(handle);
     // const value = G.env.gc.get(handle);
 

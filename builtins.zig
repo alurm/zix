@@ -98,7 +98,7 @@ pub fn loop(
     // const body = value.closure;
 
     while (true) {
-        const handle = try evaluate_closure(allocator, env, condition);
+        const handle = try evaluate_closure(allocator, env, condition, arguments);
         defer env.gc.unprotect(handle);
         value = env.gc.get(handle).*;
         switch (value) {
@@ -120,11 +120,12 @@ fn evaluate_closure(
     allocator: std.mem.Allocator,
     env: *Environment,
     closure: values.Closure,
+    arguments: []Gc.Handle,
 ) !Gc.Handle {
     const old_context = env.context;
     defer env.context = old_context;
     env.context = closure.context;
-    return Environment.evaluate_block(env, allocator, closure.block);
+    return Environment.evaluate_block(env, allocator, closure.block, arguments);
 }
 
 // Should return a list?
